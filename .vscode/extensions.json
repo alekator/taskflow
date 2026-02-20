@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    "formulahendry.auto-rename-tag",
+    "ms-vscode.vscode-docker",
+    "ms-vscode-remote.remote-containers",
+    "editorconfig.editorconfig",
+    "usernamehw.errorlens",
+    "dsznajder.es7-react-js-snippets",
+    "dbaeumer.vscode-eslint",
+    "eamodio.gitlens",
+    "orta.vscode-jest",
+    "emilast.logfilehighlighter",
+    "pkief.material-icon-theme",
+    "unifiedjs.vscode-mdx",
+    "xiaoyicheng.mdx-preview",
+    "ms-playwright.playwright",
+    "postman.postman-for-vscode",
+    "esbenp.prettier-vscode",
+    "prisma.prisma",
+    "bradlc.vscode-tailwindcss"
+  ]
+}
