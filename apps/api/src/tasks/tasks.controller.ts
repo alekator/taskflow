@@ -9,11 +9,16 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateTaskDto } from './create-task.dto';
+import { RequestUser } from '../auth/request-user.type';
 import { AssignTaskDto } from './dto/assign-task.dto';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
-import { UpdateTaskDto } from './update-task.dto';
+
+type AuthedRequest = Request & { user: RequestUser };
+
 @Controller('projects/:projectId/tasks')
 @UseGuards(JwtAuthGuard)
 export class TasksController {
@@ -21,7 +26,7 @@ export class TasksController {
 
   @Post()
   create(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Body() dto: CreateTaskDto,
   ) {
@@ -29,13 +34,13 @@ export class TasksController {
   }
 
   @Get()
-  list(@Req() req: any, @Param('projectId') projectId: string) {
+  list(@Req() req: AuthedRequest, @Param('projectId') projectId: string) {
     return this.tasks.list(req.user.id, projectId);
   }
 
   @Patch(':id')
   update(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
     @Body() dto: UpdateTaskDto,
@@ -45,28 +50,29 @@ export class TasksController {
 
   @Delete(':id')
   remove(
-    @Req() req: any,
+    @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
   ) {
     return this.tasks.remove(req.user.id, projectId, id);
   }
+
   @Patch(':id/assign')
   assign(
+    @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
     @Body() dto: AssignTaskDto,
-    @Req() req: any,
   ) {
-    return this.tasks.assign(projectId, id, dto.assigneeId, req.user.id);
+    return this.tasks.assign(req.user.id, projectId, id, dto.assigneeId);
   }
 
   @Patch(':id/unassign')
   unassign(
+    @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
-    @Req() req: any,
   ) {
-    return this.tasks.unassign(projectId, id, req.user.id);
+    return this.tasks.unassign(req.user.id, projectId, id);
   }
 }

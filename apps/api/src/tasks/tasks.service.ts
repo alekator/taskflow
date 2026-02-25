@@ -3,26 +3,36 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProjectRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTaskDto } from './create-task.dto';
-import { UpdateTaskDto } from './update-task.dto';
+import { CreateTaskDto } from './dto/create-task.dto';
+import { UpdateTaskDto } from './dto/update-task.dto';
+
 @Injectable()
 export class TasksService {
   constructor(private prisma: PrismaService) {}
 
-  private async assertProjectOwned(projectId: string, userId: string) {
-    const project = await this.prisma.project.findFirst({
-      where: { id: projectId, ownerId: userId },
-      select: { id: true },
+  private async getMyProjectRole(userId: string, projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, ownerId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (project.ownerId === userId) return ProjectRole.OWNER;
+
+    const member = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { role: true },
     });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
+    if (!member) throw new ForbiddenException();
+
+    return member.role;
   }
 
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
-    await this.assertProjectOwned(projectId, userId);
+    const role = await this.getMyProjectRole(userId, projectId);
 
     return this.prisma.task.create({
       data: {
@@ -33,12 +43,14 @@ export class TasksService {
         order: dto.order,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         projectId,
+
+        assigneeId: role === ProjectRole.MEMBER ? userId : undefined,
       },
     });
   }
 
   async list(userId: string, projectId: string) {
-    await this.assertProjectOwned(projectId, userId);
+    await this.getMyProjectRole(userId, projectId);
 
     return this.prisma.task.findMany({
       where: { projectId },
@@ -52,13 +64,16 @@ export class TasksService {
     taskId: string,
     dto: UpdateTaskDto,
   ) {
-    await this.assertProjectOwned(projectId, userId);
+    const role = await this.getMyProjectRole(userId, projectId);
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');
+
+    if (role === ProjectRole.MEMBER && task.assigneeId !== userId) {
+      throw new ForbiddenException();
+    }
 
     return this.prisma.task.update({
       where: { id: taskId },
@@ -79,34 +94,57 @@ export class TasksService {
   }
 
   async remove(userId: string, projectId: string, taskId: string) {
-    await this.assertProjectOwned(projectId, userId);
+    const role = await this.getMyProjectRole(userId, projectId);
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');
+
+    if (role === ProjectRole.MEMBER && task.assigneeId !== userId) {
+      throw new ForbiddenException();
+    }
 
     await this.prisma.task.delete({ where: { id: taskId } });
     return { ok: true };
   }
+
   async assign(
+    userId: string,
     projectId: string,
     taskId: string,
     assigneeId: string,
-    userId: string,
   ) {
-    const project = await this.prisma.project.findFirst({
-      where: { id: projectId, ownerId: userId },
-      select: { id: true },
-    });
-    if (!project) throw new ForbiddenException();
+    const role = await this.getMyProjectRole(userId, projectId);
+
+    if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
+      throw new ForbiddenException();
+    }
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: assigneeId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (project.ownerId !== assigneeId) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId: assigneeId } },
+        select: { userId: true },
+      });
+      if (!member) throw new ForbiddenException('Assignee is not in project');
+    }
 
     return this.prisma.task.update({
       where: { id: taskId },
@@ -114,16 +152,15 @@ export class TasksService {
     });
   }
 
-  async unassign(projectId: string, taskId: string, userId: string) {
-    const project = await this.prisma.project.findFirst({
-      where: { id: projectId, ownerId: userId },
-      select: { id: true },
-    });
-    if (!project) throw new ForbiddenException();
+  async unassign(userId: string, projectId: string, taskId: string) {
+    const role = await this.getMyProjectRole(userId, projectId);
+
+    if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
+      throw new ForbiddenException();
+    }
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
-      select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');
 
