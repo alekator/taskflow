@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -23,6 +23,8 @@ import {
   type TaskStatus,
 } from "../../../../src/lib/tasks/api";
 import { useProjectRealtime } from "../../../../src/lib/realtime/use-project-realtime";
+import { useToast } from "../../../../src/components/feedback/toast-provider";
+import { getErrorDetails } from "../../../../src/lib/errors";
 
 const roles: ProjectRole[] = ["OWNER", "MANAGER", "MEMBER"];
 const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
@@ -39,6 +41,7 @@ type RealtimeEvent = {
 };
 
 export default function ProjectDetailsPage() {
+  const { notify } = useToast();
   const params = useParams<{ projectId: string }>();
   const projectId = params.projectId;
 
@@ -113,11 +116,8 @@ export default function ProjectDetailsPage() {
       setMembers(membersData.items);
       setTasks(tasksData.items);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to load project details");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
     } finally {
       setLoading(false);
     }
@@ -154,12 +154,11 @@ export default function ProjectDetailsPage() {
       setNewUserId("");
       setNewRole("MEMBER");
       await load();
+      notify("success", "Member added");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to add member");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setMemberPending(false);
     }
@@ -174,12 +173,11 @@ export default function ProjectDetailsPage() {
     try {
       await removeProjectMember(projectId, userId);
       await load();
+      notify("success", "Member removed");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to remove member");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setMemberPending(false);
     }
@@ -206,12 +204,11 @@ export default function ProjectDetailsPage() {
       setNewTaskDescription("");
       setNewTaskPriority("MEDIUM");
       await load();
+      notify("success", "Task created");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to create task");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskCreatePending(false);
     }
@@ -227,11 +224,9 @@ export default function ProjectDetailsPage() {
       await updateProjectTask(projectId, task.id, task.version, { status });
       await load();
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to update task status");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
@@ -247,11 +242,9 @@ export default function ProjectDetailsPage() {
       await updateProjectTask(projectId, task.id, task.version, { priority });
       await load();
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to update task priority");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
@@ -270,12 +263,11 @@ export default function ProjectDetailsPage() {
         await unassignProjectTask(projectId, task.id);
       }
       await load();
+      notify("success", assigneeId ? "Task assigned" : "Task unassigned");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to assign task");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
@@ -290,12 +282,11 @@ export default function ProjectDetailsPage() {
     try {
       await deleteProjectTask(projectId, task.id, task.version);
       await load();
+      notify("success", "Task deleted");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to delete task");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
@@ -320,11 +311,9 @@ export default function ProjectDetailsPage() {
       });
       await load();
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to move task");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
@@ -351,18 +340,22 @@ export default function ProjectDetailsPage() {
       ]);
       await load();
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to reorder task");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setTaskActionId(null);
     }
   };
 
   if (loading) {
-    return <p className="soft">Loading project...</p>;
+    return (
+      <div className="stack">
+        <div className="skeleton skeleton-lg" />
+        <div className="skeleton" />
+        <div className="skeleton" />
+      </div>
+    );
   }
 
   return (
@@ -390,6 +383,7 @@ export default function ProjectDetailsPage() {
         <label>
           User ID
           <input
+            data-testid="member-user-id-input"
             placeholder="Paste user id"
             value={newUserId}
             onChange={(e) => setNewUserId(e.target.value)}
@@ -534,6 +528,7 @@ export default function ProjectDetailsPage() {
         <label>
           Task title
           <input
+            data-testid="task-title-input"
             value={newTaskTitle}
             onChange={(e) => setNewTaskTitle(e.target.value)}
             minLength={1}
@@ -544,6 +539,7 @@ export default function ProjectDetailsPage() {
         <label>
           Description
           <input
+            data-testid="task-description-input"
             value={newTaskDescription}
             onChange={(e) => setNewTaskDescription(e.target.value)}
           />
@@ -578,12 +574,10 @@ export default function ProjectDetailsPage() {
           const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
 
           return (
-            <li key={task.id} className="item-card">
+            <li key={task.id} className="item-card" data-testid="task-item">
               <div className="stack">
                 <strong>{task.title}</strong>
-                <span className="soft">
-                  {task.description || "No description"}
-                </span>
+                <span className="soft">{task.description || "No description"}</span>
                 <span className="meta">
                   version {task.version} • order {task.order}
                 </span>
@@ -648,6 +642,7 @@ export default function ProjectDetailsPage() {
                 </span>
 
                 <button
+                  data-testid={`task-delete-${task.id}`}
                   className="button button-ghost"
                   type="button"
                   disabled={busy}
@@ -663,3 +658,4 @@ export default function ProjectDetailsPage() {
     </div>
   );
 }
+

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Space_Grotesk } from "next/font/google";
 import { AuthProvider } from "../src/components/auth/auth-provider";
+import { ToastProvider } from "../src/components/feedback/toast-provider";
 import "./globals.css";
 
 const bodyFont = Manrope({
@@ -28,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${bodyFont.variable} ${headingFont.variable}`}>
-        <AuthProvider>{children}</AuthProvider>
+        <ToastProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

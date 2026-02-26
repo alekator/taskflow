@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { listAuditLogs, type AuditLog } from "../../../src/lib/audit/api";
+import { getErrorDetails } from "../../../src/lib/errors";
 
 export default function AuditPage() {
   const [items, setItems] = useState<AuditLog[]>([]);
@@ -36,11 +37,8 @@ export default function AuditPage() {
         setItems(res.items);
         setTotalPages(res.meta.totalPages);
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to load audit logs");
-        }
+        const details = getErrorDetails(err);
+        setError(details.message);
       } finally {
         setLoading(false);
       }
@@ -84,7 +82,13 @@ export default function AuditPage() {
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
-      {loading ? <p className="soft">Loading logs...</p> : null}
+      {loading ? (
+        <div className="stack">
+          <div className="skeleton skeleton-lg" />
+          <div className="skeleton" />
+          <div className="skeleton" />
+        </div>
+      ) : null}
 
       {items.length === 0 && !loading ? (
         <div className="empty-state">No logs found for current filters.</div>

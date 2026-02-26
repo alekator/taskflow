@@ -7,8 +7,11 @@ import {
   listProjects,
   type Project,
 } from "../../../src/lib/projects/api";
+import { useToast } from "../../../src/components/feedback/toast-provider";
+import { getErrorDetails } from "../../../src/lib/errors";
 
 export default function ProjectsPage() {
+  const { notify } = useToast();
   const [items, setItems] = useState<Project[]>([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
@@ -43,11 +46,8 @@ export default function ProjectsPage() {
         setItems(res.items);
         setTotalPages(res.meta.totalPages);
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to load projects");
-        }
+        const details = getErrorDetails(err);
+        setError(details.message);
       } finally {
         setLoading(false);
       }
@@ -82,12 +82,11 @@ export default function ProjectsPage() {
       setItems(refreshed.items);
       setTotalPages(refreshed.meta.totalPages);
       setPage(1);
+      notify("success", "Project created");
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Failed to create project");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setCreatePending(false);
     }
@@ -104,6 +103,7 @@ export default function ProjectsPage() {
         <label>
           Project name
           <input
+            data-testid="project-name-input"
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
             minLength={1}
@@ -113,22 +113,30 @@ export default function ProjectsPage() {
         <label>
           Description
           <input
+            data-testid="project-description-input"
             value={createDescription}
             onChange={(e) => setCreateDescription(e.target.value)}
           />
         </label>
-        <button className="button button-primary" type="submit" disabled={createPending}>
+        <button
+          data-testid="project-create-submit"
+          className="button button-primary"
+          type="submit"
+          disabled={createPending}
+        >
           {createPending ? "Creating..." : "Create project"}
         </button>
       </form>
 
       <div className="toolbar">
         <input
+          data-testid="project-search-input"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name/description"
         />
         <button
+          data-testid="project-search-apply"
           className="button button-ghost"
           type="button"
           onClick={() => {
@@ -141,7 +149,13 @@ export default function ProjectsPage() {
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
-      {loading ? <p className="soft">Loading projects...</p> : null}
+      {loading ? (
+        <div className="stack">
+          <div className="skeleton skeleton-lg" />
+          <div className="skeleton" />
+          <div className="skeleton" />
+        </div>
+      ) : null}
 
       {items.length === 0 && !loading ? (
         <div className="empty-state">
@@ -151,8 +165,12 @@ export default function ProjectsPage() {
 
       <ul className="list">
         {items.map((project) => (
-          <li key={project.id} className="item-card">
-            <Link href={`/app/projects/${project.id}`} className="stack">
+          <li key={project.id} className="item-card" data-testid="project-item">
+            <Link
+              href={`/app/projects/${project.id}`}
+              className="stack"
+              data-testid={`project-link-${project.id}`}
+            >
               <strong>{project.name}</strong>
               <span className="soft">
                 {project.description || "No description"}

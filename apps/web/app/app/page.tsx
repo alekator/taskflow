@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { listAuditLogs, type AuditLog } from "../../src/lib/audit/api";
+import { getErrorDetails } from "../../src/lib/errors";
 import { listProjects } from "../../src/lib/projects/api";
 
 type OverviewStats = {
@@ -39,11 +40,8 @@ export default function AppHomePage() {
         });
         setRecentAudit(auditRes.items);
       } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message);
-        } else {
-          setError("Failed to load overview metrics");
-        }
+        const details = getErrorDetails(err);
+        setError(details.message);
       } finally {
         setLoading(false);
       }
@@ -66,7 +64,13 @@ export default function AppHomePage() {
       </header>
 
       {error ? <p className="error-text">{error}</p> : null}
-      {loading ? <p className="soft">Loading metrics...</p> : null}
+      {loading ? (
+        <div className="stack">
+          <div className="skeleton skeleton-lg" />
+          <div className="skeleton" />
+          <div className="skeleton" />
+        </div>
+      ) : null}
 
       <section className="columns-3">
         <article className="stat-card">

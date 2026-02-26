@@ -4,9 +4,12 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "./auth-provider";
 import { ROUTES } from "../../lib/routes";
+import { useToast } from "../feedback/toast-provider";
+import { getErrorDetails } from "../../lib/errors";
 
 export function LoginForm() {
   const { login } = useAuth();
+  const { notify } = useToast();
   const [email, setEmail] = useState("admin@test.com");
   const [password, setPassword] = useState("123456");
   const [error, setError] = useState<string | null>(null);
@@ -22,13 +25,12 @@ export function LoginForm() {
     try {
       await login(email, password);
       const next = searchParams.get("next") || ROUTES.app;
+      notify("success", "Signed in successfully");
       router.replace(next);
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Login failed");
-      }
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
     } finally {
       setPending(false);
     }
@@ -39,6 +41,7 @@ export function LoginForm() {
       <label>
         Email
         <input
+          data-testid="login-email"
           type="email"
           autoComplete="email"
           value={email}
@@ -49,6 +52,7 @@ export function LoginForm() {
       <label>
         Password
         <input
+          data-testid="login-password"
           type="password"
           autoComplete="current-password"
           value={password}
@@ -60,7 +64,12 @@ export function LoginForm() {
 
       {error ? <p className="error-text">{error}</p> : null}
 
-      <button className="button button-primary" disabled={pending} type="submit">
+      <button
+        data-testid="login-submit"
+        className="button button-primary"
+        disabled={pending}
+        type="submit"
+      >
         {pending ? "Signing in..." : "Sign in"}
       </button>
     </form>

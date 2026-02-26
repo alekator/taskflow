@@ -1,4 +1,5 @@
 {
+  "globalEnv": ["E2E_BASE_URL", "E2E_ADMIN_EMAIL", "E2E_ADMIN_PASSWORD"],
   "tasks": {
     "dev": {
       "cache": false,
