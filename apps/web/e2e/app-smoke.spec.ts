@@ -13,7 +13,7 @@ async function login(page: import("@playwright/test").Page) {
 
 test("auth + projects page opens", async ({ page }) => {
   await login(page);
-  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("link", { name: "Projects", exact: true }).first().click();
   await expect(page).toHaveURL(/\/app\/projects$/);
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
 });
@@ -39,8 +39,6 @@ test("create project and task, then move task in kanban", async ({ page }) => {
   await page.getByTestId("task-description-input").fill("Task from e2e");
   await page.getByRole("button", { name: "Create task" }).click();
 
-  await expect(page.getByText(taskName)).toBeVisible();
-
   const taskCard = page.locator(".kanban-item", { hasText: taskName }).first();
   await expect(taskCard).toBeVisible();
 
@@ -48,4 +46,3 @@ test("create project and task, then move task in kanban", async ({ page }) => {
   await expect(page.getByText("In progress")).toBeVisible();
   await expect(page.locator(".kanban-column", { hasText: "In progress" }).getByText(taskName)).toBeVisible();
 });
-
