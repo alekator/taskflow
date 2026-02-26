@@ -396,6 +396,40 @@ a {
   padding: 0 10px;
 }
 
+.overview-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.readiness-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.badge {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.badge-ok {
+  background: rgb(111 155 85 / 20%);
+  border: 1px solid rgb(111 155 85 / 35%);
+  color: var(--moss-700);
+}
+
+.badge-pending {
+  background: rgb(227 109 55 / 14%);
+  border: 1px solid rgb(227 109 55 / 35%);
+  color: var(--accent-700);
+}
+
 .auth-panel {
   margin: 0 auto;
   max-width: 540px;
@@ -483,6 +517,10 @@ a {
   }
 
   .kanban {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-grid {
     grid-template-columns: 1fr;
   }
 
