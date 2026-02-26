@@ -206,6 +206,21 @@ a {
   text-align: right;
 }
 
+.login-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.login-aside {
+  align-self: start;
+}
+
+.login-credentials {
+  display: grid;
+  gap: 6px;
+}
+
 .shell {
   margin: 0 auto;
   max-width: 1440px;
@@ -974,6 +989,13 @@ a {
   padding-bottom: 10px;
 }
 
+.audit-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
 .activity-feed li:last-child .activity-copy {
   border-bottom: 0;
   padding-bottom: 0;
@@ -1026,6 +1048,7 @@ a {
   .projects-layout,
   .projects-toolbar,
   .board-main-grid,
+  .login-layout,
   .project-header,
   .projects-list-header,
   .projects-row {
