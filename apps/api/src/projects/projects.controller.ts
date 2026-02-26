@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -89,13 +90,18 @@ export class ProjectsController {
   update(
     @Req() req: AuthedRequest,
     @Param('id') id: string,
+    @Headers('if-match') ifMatch: string | undefined,
     @Body() dto: UpdateProjectDto,
   ) {
-    return this.projects.update(req.user.id, id, dto);
+    return this.projects.update(req.user.id, id, ifMatch, dto);
   }
 
   @Delete(':id')
-  remove(@Req() req: AuthedRequest, @Param('id') id: string) {
-    return this.projects.remove(req.user.id, id);
+  remove(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Headers('if-match') ifMatch: string | undefined,
+  ) {
+    return this.projects.remove(req.user.id, id, ifMatch);
   }
 }

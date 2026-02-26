@@ -28,6 +28,7 @@ type TaskPayload = Partial<{
 type TaskResponse = {
   id: string;
   title: string;
+  version: number;
   assigneeId: string | null;
 };
 
@@ -80,6 +81,10 @@ describe('RBAC (e2e)', () => {
 
   function authHeader(accessToken: string) {
     return { Authorization: `Bearer ${accessToken}` };
+  }
+
+  function ifMatchHeader(version: number) {
+    return { 'If-Match': String(version) };
   }
 
   async function ensureUsers() {
@@ -137,6 +142,15 @@ describe('RBAC (e2e)', () => {
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.project.deleteMany();
+  }
+
+  async function getTaskVersion(taskId: string): Promise<number> {
+    const task = (await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { version: true },
+    })) as { version: number } | null;
+    if (!task) throw new Error('Task not found while reading version');
+    return task.version;
   }
 
   async function createProject(
@@ -211,21 +225,26 @@ describe('RBAC (e2e)', () => {
     projectId: string,
     taskId: string,
     data: TaskPayload,
+    ifMatchVersion?: number,
   ): SupertestTest {
-    return request(server)
+    const req = request(server)
       .patch(api(`/projects/${projectId}/tasks/${taskId}`))
-      .set(authHeader(accessToken))
-      .send(data);
+      .set(authHeader(accessToken));
+    if (ifMatchVersion !== undefined) req.set(ifMatchHeader(ifMatchVersion));
+    return req.send(data);
   }
 
   function deleteTask(
     accessToken: string,
     projectId: string,
     taskId: string,
+    ifMatchVersion?: number,
   ): SupertestTest {
-    return request(server)
+    const req = request(server)
       .delete(api(`/projects/${projectId}/tasks/${taskId}`))
       .set(authHeader(accessToken));
+    if (ifMatchVersion !== undefined) req.set(ifMatchHeader(ifMatchVersion));
+    return req;
   }
 
   function assignTask(
@@ -453,6 +472,7 @@ describe('RBAC (e2e)', () => {
       project.id,
       createdBody.id,
       { title: 'After' },
+      await getTaskVersion(createdBody.id),
     ).expect(200);
     const updatedBody = updated.body as TaskResponse;
     expect(updatedBody.title).toBe('After');

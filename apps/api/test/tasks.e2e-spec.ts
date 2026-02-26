@@ -54,6 +54,10 @@ describe('Tasks (e2e)', () => {
     return { Authorization: `Bearer ${accessToken}` };
   }
 
+  function ifMatchHeader(version: number) {
+    return { 'If-Match': String(version) };
+  }
+
   async function login(email: string, password: string) {
     const res = await request(server)
       .post(api('/auth/login'))
@@ -169,10 +173,21 @@ describe('Tasks (e2e)', () => {
 
     return res.body as {
       id: string;
+      version: number;
       assigneeId: string | null;
       title: string;
       projectId: string;
     };
+  }
+
+  async function getTaskVersion(taskId: string): Promise<number> {
+    const task = (await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { version: true },
+    })) as { version: number } | null;
+
+    if (!task) throw new Error('Task not found while reading version');
+    return task.version;
   }
 
   function listTasks(
@@ -201,21 +216,26 @@ describe('Tasks (e2e)', () => {
       order: number;
       dueDate: string | null;
     }>,
+    ifMatchVersion?: number,
   ): SupertestTest {
-    return request(server)
+    const req = request(server)
       .patch(api(`/projects/${projectId}/tasks/${taskId}`))
-      .set(authHeader(accessToken))
-      .send(dto);
+      .set(authHeader(accessToken));
+    if (ifMatchVersion !== undefined) req.set(ifMatchHeader(ifMatchVersion));
+    return req.send(dto);
   }
 
   function deleteTask(
     accessToken: string,
     projectId: string,
     taskId: string,
+    ifMatchVersion?: number,
   ): SupertestTest {
-    return request(server)
+    const req = request(server)
       .delete(api(`/projects/${projectId}/tasks/${taskId}`))
       .set(authHeader(accessToken));
+    if (ifMatchVersion !== undefined) req.set(ifMatchHeader(ifMatchVersion));
+    return req;
   }
 
   function assignTask(
@@ -378,9 +398,15 @@ describe('Tasks (e2e)', () => {
       title: 'Task by user2',
     });
 
-    await updateTask(u1.accessToken, project.id, task1.id, {
-      title: 'Updated by user1',
-    }).expect(200);
+    await updateTask(
+      u1.accessToken,
+      project.id,
+      task1.id,
+      {
+        title: 'Updated by user1',
+      },
+      await getTaskVersion(task1.id),
+    ).expect(200);
 
     await updateTask(u1.accessToken, project.id, task2.id, {
       title: 'Hacked',
@@ -388,7 +414,12 @@ describe('Tasks (e2e)', () => {
 
     await deleteTask(u1.accessToken, project.id, task2.id).expect(403);
 
-    await deleteTask(u1.accessToken, project.id, task1.id).expect(200);
+    await deleteTask(
+      u1.accessToken,
+      project.id,
+      task1.id,
+      await getTaskVersion(task1.id),
+    ).expect(200);
   });
 
   it('tasks: OWNER/MANAGER can update/delete any task in project', async () => {
@@ -423,14 +454,21 @@ describe('Tasks (e2e)', () => {
       title: 'Member created',
     });
 
-    await updateTask(managerLogin.accessToken, project.id, taskFromMember.id, {
-      status: TaskStatus.DONE,
-    }).expect(200);
+    await updateTask(
+      managerLogin.accessToken,
+      project.id,
+      taskFromMember.id,
+      {
+        status: TaskStatus.DONE,
+      },
+      await getTaskVersion(taskFromMember.id),
+    ).expect(200);
 
     await deleteTask(
       adminLogin.accessToken,
       project.id,
       taskFromMember.id,
+      await getTaskVersion(taskFromMember.id),
     ).expect(200);
   });
 
@@ -549,6 +587,7 @@ describe('Tasks (e2e)', () => {
       project.id,
       task.id,
       { dueDate: null },
+      await getTaskVersion(task.id),
     ).expect(200);
     expect((cleared.body as { dueDate: string | null }).dueDate).toBeNull();
   });

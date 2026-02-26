@@ -1,7 +1,9 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { Prisma, UserRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
 import { RequestContextService } from '../common/request-context.service';
+import { stableJsonStringify } from '../common/stable-json';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListAuditLogsQueryDto } from './dto/list-audit-logs-query.dto';
 
@@ -23,10 +25,19 @@ export class AuditService {
 
   async log(input: AuditLogInput) {
     const ctx = this.requestContext.get();
+    const createdAt = new Date();
 
     try {
-      await this.prisma.auditLog.create({
-        data: {
+      await this.prisma.$transaction(async (tx) => {
+        const previous = await tx.auditLog.findFirst({
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { hash: true },
+        });
+
+        const payload = input.payload ?? undefined;
+        const prevHash = previous?.hash ?? null;
+        const hash = this.computeHash({
+          createdAt,
           action: input.action,
           actorUserId: input.actorUserId ?? null,
           entityType: input.entityType ?? null,
@@ -35,8 +46,26 @@ export class AuditService {
           requestId: ctx?.requestId ?? null,
           ip: ctx?.ip ?? null,
           userAgent: ctx?.userAgent ?? null,
-          payload: input.payload ?? undefined,
-        },
+          prevHash,
+          payload,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            createdAt,
+            action: input.action,
+            actorUserId: input.actorUserId ?? null,
+            entityType: input.entityType ?? null,
+            entityId: input.entityId ?? null,
+            projectId: input.projectId ?? null,
+            requestId: ctx?.requestId ?? null,
+            ip: ctx?.ip ?? null,
+            userAgent: ctx?.userAgent ?? null,
+            prevHash,
+            hash,
+            payload,
+          },
+        });
       });
     } catch {
       // Audit logging should never break user-facing flows.
@@ -82,5 +111,35 @@ export class AuditService {
     ]);
 
     return toPaginatedResult(items, page, limit, total);
+  }
+
+  private computeHash(input: {
+    createdAt: Date;
+    action: string;
+    actorUserId: string | null;
+    entityType: string | null;
+    entityId: string | null;
+    projectId: string | null;
+    requestId: string | null;
+    ip: string | null;
+    userAgent: string | null;
+    prevHash: string | null;
+    payload?: Prisma.InputJsonValue;
+  }): string {
+    const canonical = stableJsonStringify({
+      createdAt: input.createdAt.toISOString(),
+      action: input.action,
+      actorUserId: input.actorUserId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      projectId: input.projectId,
+      requestId: input.requestId,
+      ip: input.ip,
+      userAgent: input.userAgent,
+      prevHash: input.prevHash,
+      payload: input.payload ?? null,
+    });
+
+    return createHash('sha256').update(canonical).digest('hex');
   }
 }

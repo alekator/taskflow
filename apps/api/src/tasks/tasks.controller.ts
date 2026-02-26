@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -49,9 +50,10 @@ export class TasksController {
     @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
+    @Headers('if-match') ifMatch: string | undefined,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.tasks.update(req.user.id, projectId, id, dto);
+    return this.tasks.update(req.user.id, projectId, id, ifMatch, dto);
   }
 
   @Delete(':id')
@@ -59,8 +61,9 @@ export class TasksController {
     @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
     @Param('id') id: string,
+    @Headers('if-match') ifMatch: string | undefined,
   ) {
-    return this.tasks.remove(req.user.id, projectId, id);
+    return this.tasks.remove(req.user.id, projectId, id, ifMatch);
   }
 
   @Patch(':id/assign')

@@ -5,7 +5,7 @@ import {
   RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -19,6 +19,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
+import { IdempotencyModule } from './idempotency/idempotency.module';
+import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 
 @Module({
   imports: [
@@ -40,6 +42,7 @@ import { UsersModule } from './users/users.module';
     }),
     PrismaModule,
     AuditModule,
+    IdempotencyModule,
     RealtimeModule,
     AuthModule,
     UsersModule,
@@ -47,7 +50,11 @@ import { UsersModule } from './users/users.module';
     TasksModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

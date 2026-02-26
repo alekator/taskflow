@@ -125,6 +125,7 @@ describe('Audit Logs (e2e)', () => {
   it('ADMIN can list audit logs and see project creation action', async () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
     await createProject(adminLogin.accessToken, 'Audit Project');
+    await createProject(adminLogin.accessToken, 'Audit Project 2');
 
     const res = await listAuditLogs(adminLogin.accessToken, {
       action: 'PROJECT_CREATE',
@@ -133,7 +134,13 @@ describe('Audit Logs (e2e)', () => {
     }).expect(200);
 
     const body = res.body as {
-      items: Array<{ action: string; actorUserId: string; entityType: string }>;
+      items: Array<{
+        action: string;
+        actorUserId: string;
+        entityType: string;
+        hash: string | null;
+        prevHash: string | null;
+      }>;
       meta: { total: number };
     };
 
@@ -141,6 +148,18 @@ describe('Audit Logs (e2e)', () => {
     expect(body.items[0].action).toBe('PROJECT_CREATE');
     expect(body.items[0].entityType).toBe('project');
     expect(body.items[0].actorUserId).toBe(adminLogin.user.id);
+
+    const chain = await prisma.auditLog.findMany({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { hash: true, prevHash: true },
+    });
+
+    expect(chain.length).toBeGreaterThanOrEqual(2);
+    expect(chain[0].prevHash).toBeNull();
+    for (let i = 1; i < chain.length; i += 1) {
+      expect(chain[i].prevHash).toBe(chain[i - 1].hash);
+      expect(chain[i].hash).toBeTruthy();
+    }
   });
 
   it('non-admin cannot list audit logs', async () => {

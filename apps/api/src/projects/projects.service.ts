@@ -3,9 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  PreconditionFailedException,
 } from '@nestjs/common';
 import { Prisma, ProjectRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { requireIfMatchVersion } from '../common/if-match';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -134,32 +136,79 @@ export class ProjectsService {
     return project;
   }
 
-  async update(userId: string, projectId: string, dto: UpdateProjectDto) {
+  async update(
+    userId: string,
+    projectId: string,
+    ifMatchHeader: string | undefined,
+    dto: UpdateProjectDto,
+  ) {
     const role = await this.requireRole(userId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();
     }
 
-    return this.prisma.project.update({
-      where: { id: projectId },
+    const expectedVersion = requireIfMatchVersion(ifMatchHeader);
+    const result = await this.prisma.project.updateMany({
+      where: { id: projectId, version: expectedVersion },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.description !== undefined
           ? { description: dto.description }
           : {}),
+        version: { increment: 1 },
       },
     });
+
+    if (result.count !== 1) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
+
+    const updated = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (!updated) throw new NotFoundException('Project not found');
+
+    await this.audit.log({
+      action: 'PROJECT_UPDATE',
+      actorUserId: userId,
+      entityType: 'project',
+      entityId: projectId,
+      projectId,
+      payload: {
+        previousVersion: expectedVersion,
+        currentVersion: updated.version,
+      },
+    });
+
+    return updated;
   }
 
-  async remove(userId: string, projectId: string) {
+  async remove(userId: string, projectId: string, ifMatchHeader?: string) {
     const role = await this.requireRole(userId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();
     }
 
-    await this.prisma.project.delete({ where: { id: projectId } });
+    const expectedVersion = requireIfMatchVersion(ifMatchHeader);
+    const removed = await this.prisma.project.deleteMany({
+      where: { id: projectId, version: expectedVersion },
+    });
+
+    if (removed.count !== 1) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
+
+    await this.audit.log({
+      action: 'PROJECT_DELETE',
+      actorUserId: userId,
+      entityType: 'project',
+      entityId: projectId,
+      projectId,
+      payload: { previousVersion: expectedVersion },
+    });
+
     return { ok: true };
   }
 

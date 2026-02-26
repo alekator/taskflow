@@ -34,12 +34,14 @@ model User {
   tasksAssigned  Task[]          @relation("TaskAssignee")
   projectMembers ProjectMember[]
   auditLogs      AuditLog[]
+  idempotencyRecords IdempotencyRecord[]
 }
 
 model Project {
   id          String  @id @default(cuid())
   name        String
   description String?
+  version     Int     @default(1)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -86,6 +88,7 @@ model Task {
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   order       Int          @default(0)
+  version     Int          @default(1)
   dueDate     DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -108,6 +111,8 @@ model AuditLog {
   requestId  String?
   ip         String?
   userAgent  String?
+  prevHash   String?
+  hash       String?
   payload    Json?
 
   actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -118,4 +123,31 @@ model AuditLog {
   @@index([projectId])
   @@index([actorUserId])
   @@index([requestId])
+  @@index([prevHash])
+  @@index([hash])
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model IdempotencyRecord {
+  id          String            @id @default(cuid())
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  actorUserId String
+  method      String
+  path        String
+  key         String
+  requestHash String
+  status      IdempotencyStatus @default(IN_PROGRESS)
+  statusCode  Int?
+  responseBody Json?
+
+  actorUser User @relation(fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@unique([actorUserId, method, path, key])
+  @@index([createdAt])
+  @@index([actorUserId])
 }

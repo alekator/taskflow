@@ -2,9 +2,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  PreconditionFailedException,
 } from '@nestjs/common';
 import { Prisma, ProjectRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
+import { requireIfMatchVersion } from '../common/if-match';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -119,6 +121,7 @@ export class TasksService {
     userId: string,
     projectId: string,
     taskId: string,
+    ifMatchHeader: string | undefined,
     dto: UpdateTaskDto,
   ) {
     const role = await this.getMyProjectRole(userId, projectId);
@@ -132,8 +135,13 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
-    const updated = await this.prisma.task.update({
-      where: { id: taskId },
+    const expectedVersion = requireIfMatchVersion(ifMatchHeader);
+    if (task.version !== expectedVersion) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
+
+    const updatedResult = await this.prisma.task.updateMany({
+      where: { id: taskId, version: expectedVersion },
       data: {
         title: dto.title,
         description: dto.description,
@@ -146,8 +154,18 @@ export class TasksService {
             : dto.dueDate
               ? new Date(dto.dueDate)
               : undefined,
+        version: { increment: 1 },
       },
     });
+
+    if (updatedResult.count !== 1) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
+
+    const updated = await this.prisma.task.findUnique({
+      where: { id: taskId },
+    });
+    if (!updated) throw new NotFoundException('Task not found');
 
     this.realtime.emitTaskEvent(projectId, 'task.updated', {
       actorUserId: userId,
@@ -169,7 +187,12 @@ export class TasksService {
     return updated;
   }
 
-  async remove(userId: string, projectId: string, taskId: string) {
+  async remove(
+    userId: string,
+    projectId: string,
+    taskId: string,
+    ifMatchHeader?: string,
+  ) {
     const role = await this.getMyProjectRole(userId, projectId);
 
     const task = await this.prisma.task.findFirst({
@@ -181,7 +204,18 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
-    await this.prisma.task.delete({ where: { id: taskId } });
+    const expectedVersion = requireIfMatchVersion(ifMatchHeader);
+    if (task.version !== expectedVersion) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
+
+    const deleted = await this.prisma.task.deleteMany({
+      where: { id: taskId, version: expectedVersion },
+    });
+
+    if (deleted.count !== 1) {
+      throw new PreconditionFailedException('Version mismatch');
+    }
 
     this.realtime.emitTaskEvent(projectId, 'task.deleted', {
       actorUserId: userId,
