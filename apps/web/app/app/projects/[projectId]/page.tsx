@@ -22,10 +22,16 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "../../../../src/lib/tasks/api";
+import { useProjectRealtime } from "../../../../src/lib/realtime/use-project-realtime";
 
 const roles: ProjectRole[] = ["OWNER", "MANAGER", "MEMBER"];
 const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 const taskPriorities: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+
+type RealtimeEvent = {
+  type: string;
+  timestamp: string;
+};
 
 export default function ProjectDetailsPage() {
   const params = useParams<{ projectId: string }>();
@@ -46,6 +52,8 @@ export default function ProjectDetailsPage() {
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("MEDIUM");
   const [taskCreatePending, setTaskCreatePending] = useState(false);
   const [taskActionId, setTaskActionId] = useState<string | null>(null);
+
+  const [events, setEvents] = useState<RealtimeEvent[]>([]);
 
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.userId, member])),
@@ -95,6 +103,18 @@ export default function ProjectDetailsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useProjectRealtime(
+    projectId,
+    (event) => {
+      setEvents((prev) => [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(0, 8));
+      void load();
+    },
+    (event) => {
+      setEvents((prev) => [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(0, 8));
+      void load();
+    },
+  );
 
   const onAddMember = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -269,6 +289,19 @@ export default function ProjectDetailsPage() {
       <p style={{ color: "var(--ink-500)", fontSize: 13, marginTop: 8 }}>
         Project ID: {projectId || "n/a"}
       </p>
+
+      <h2 style={{ fontFamily: "var(--font-heading)", marginTop: 18 }}>Realtime</h2>
+      <ul style={{ display: "grid", gap: 6, listStyle: "none", marginTop: 8 }}>
+        {events.length === 0 ? (
+          <li style={{ color: "var(--ink-500)", fontSize: 13 }}>No live events yet</li>
+        ) : (
+          events.map((event, index) => (
+            <li key={`${event.type}-${event.timestamp}-${index}`} style={{ color: "var(--ink-700)", fontSize: 13 }}>
+              {new Date(event.timestamp).toLocaleTimeString()} • {event.type}
+            </li>
+          ))
+        )}
+      </ul>
 
       <form className="auth-form" onSubmit={onAddMember} style={{ marginTop: 18 }}>
         <label>
