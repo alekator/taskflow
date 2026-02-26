@@ -94,11 +94,13 @@ export default function ProjectsPage() {
   };
 
   return (
-    <>
-      <h1>Projects</h1>
-      <p>Live data from API with pagination and search.</p>
+    <div className="stack">
+      <header className="panel-header">
+        <h1>Projects</h1>
+        <p>Live data from API with pagination, search, and fast create flow.</p>
+      </header>
 
-      <form className="auth-form" onSubmit={onCreate} style={{ marginTop: 18 }}>
+      <form className="auth-form" onSubmit={onCreate}>
         <label>
           Project name
           <input
@@ -120,12 +122,11 @@ export default function ProjectsPage() {
         </button>
       </form>
 
-      <div style={{ alignItems: "center", display: "flex", gap: 8, marginTop: 18 }}>
+      <div className="toolbar">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name/description"
-          style={{ flex: 1 }}
         />
         <button
           className="button button-ghost"
@@ -139,22 +140,24 @@ export default function ProjectsPage() {
         </button>
       </div>
 
-      {error ? (
-        <p className="error-text" style={{ marginTop: 12 }}>
-          {error}
-        </p>
-      ) : null}
-      {loading ? <p style={{ marginTop: 12 }}>Loading projects...</p> : null}
+      {error ? <p className="error-text">{error}</p> : null}
+      {loading ? <p className="soft">Loading projects...</p> : null}
 
-      <ul style={{ display: "grid", gap: 10, listStyle: "none", marginTop: 14 }}>
+      {items.length === 0 && !loading ? (
+        <div className="empty-state">
+          No projects found. Create your first project or change filters.
+        </div>
+      ) : null}
+
+      <ul className="list">
         {items.map((project) => (
-          <li key={project.id} className="card" style={{ minHeight: "unset", padding: 14 }}>
-            <Link href={`/app/projects/${project.id}`} style={{ display: "grid", gap: 6 }}>
+          <li key={project.id} className="item-card">
+            <Link href={`/app/projects/${project.id}`} className="stack">
               <strong>{project.name}</strong>
-              <span style={{ color: "var(--ink-700)" }}>
+              <span className="soft">
                 {project.description || "No description"}
               </span>
-              <span style={{ color: "var(--ink-500)", fontSize: 12 }}>
+              <span className="meta">
                 version {project.version} • {new Date(project.createdAt).toLocaleString()}
               </span>
             </Link>
@@ -162,7 +165,7 @@ export default function ProjectsPage() {
         ))}
       </ul>
 
-      <div style={{ alignItems: "center", display: "flex", gap: 10, marginTop: 12 }}>
+      <div className="toolbar">
         <button
           className="button button-ghost"
           type="button"
@@ -171,7 +174,7 @@ export default function ProjectsPage() {
         >
           Prev
         </button>
-        <span style={{ color: "var(--ink-700)", fontWeight: 700 }}>
+        <span className="soft" style={{ fontWeight: 700 }}>
           Page {page} / {totalPages}
         </span>
         <button
@@ -183,7 +186,7 @@ export default function ProjectsPage() {
           Next
         </button>
       </div>
-    </>
+    </div>
   );
 }
 

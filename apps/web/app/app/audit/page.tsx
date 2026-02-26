@@ -50,18 +50,13 @@ export default function AuditPage() {
   }, [query]);
 
   return (
-    <>
-      <h1>Audit Logs</h1>
-      <p>Admin-only forensic timeline with request correlation fields.</p>
+    <div className="stack">
+      <header className="panel-header">
+        <h1>Audit Logs</h1>
+        <p>Admin-only forensic timeline with request-correlation metadata.</p>
+      </header>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 8,
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          marginTop: 14,
-        }}
-      >
+      <div className="columns-auto">
         <input
           placeholder="Action (e.g. TASK_DELETE)"
           value={action}
@@ -88,25 +83,25 @@ export default function AuditPage() {
         />
       </div>
 
-      {error ? (
-        <p className="error-text" style={{ marginTop: 10 }}>
-          {error}
-        </p>
-      ) : null}
-      {loading ? <p style={{ marginTop: 10 }}>Loading logs...</p> : null}
+      {error ? <p className="error-text">{error}</p> : null}
+      {loading ? <p className="soft">Loading logs...</p> : null}
 
-      <ul style={{ display: "grid", gap: 10, listStyle: "none", marginTop: 12 }}>
+      {items.length === 0 && !loading ? (
+        <div className="empty-state">No logs found for current filters.</div>
+      ) : null}
+
+      <ul className="list">
         {items.map((log) => (
-          <li key={log.id} className="card" style={{ minHeight: "unset", padding: 14 }}>
-            <div style={{ display: "grid", gap: 6 }}>
+          <li key={log.id} className="item-card">
+            <div className="stack">
               <strong>{log.action}</strong>
-              <span style={{ color: "var(--ink-700)", fontSize: 14 }}>
+              <span className="soft">
                 {new Date(log.createdAt).toLocaleString()} • entity: {log.entityType || "n/a"} • id: {log.entityId || "n/a"}
               </span>
-              <span style={{ color: "var(--ink-700)", fontSize: 13 }}>
+              <span className="soft">
                 actor: {log.actorUserId || "n/a"} • request: {log.requestId || "n/a"}
               </span>
-              <span style={{ color: "var(--ink-500)", fontSize: 12 }}>
+              <span className="meta">
                 hash: {(log.hash || "n/a").slice(0, 16)}... • prev: {(log.prevHash || "n/a").slice(0, 16)}...
               </span>
             </div>
@@ -114,7 +109,7 @@ export default function AuditPage() {
         ))}
       </ul>
 
-      <div style={{ alignItems: "center", display: "flex", gap: 10, marginTop: 12 }}>
+      <div className="toolbar">
         <button
           className="button button-ghost"
           type="button"
@@ -123,7 +118,7 @@ export default function AuditPage() {
         >
           Prev
         </button>
-        <span style={{ color: "var(--ink-700)", fontWeight: 700 }}>
+        <span className="soft" style={{ fontWeight: 700 }}>
           Page {page} / {totalPages}
         </span>
         <button
@@ -135,6 +130,6 @@ export default function AuditPage() {
           Next
         </button>
       </div>
-    </>
+    </div>
   );
 }

@@ -279,31 +279,31 @@ export default function ProjectDetailsPage() {
   };
 
   if (loading) {
-    return <p>Loading project...</p>;
+    return <p className="soft">Loading project...</p>;
   }
 
   return (
-    <>
-      <h1>{project?.name ?? "Project"}</h1>
-      <p>{project?.description || "No description"}</p>
-      <p style={{ color: "var(--ink-500)", fontSize: 13, marginTop: 8 }}>
-        Project ID: {projectId || "n/a"}
-      </p>
+    <div className="stack">
+      <header className="panel-header">
+        <h1>{project?.name ?? "Project"}</h1>
+        <p>{project?.description || "No description"}</p>
+        <p className="meta">Project ID: {projectId || "n/a"}</p>
+      </header>
 
       <h2 style={{ fontFamily: "var(--font-heading)", marginTop: 18 }}>Realtime</h2>
-      <ul style={{ display: "grid", gap: 6, listStyle: "none", marginTop: 8 }}>
+      <ul className="list">
         {events.length === 0 ? (
-          <li style={{ color: "var(--ink-500)", fontSize: 13 }}>No live events yet</li>
+          <li className="empty-state">No live events yet</li>
         ) : (
           events.map((event, index) => (
-            <li key={`${event.type}-${event.timestamp}-${index}`} style={{ color: "var(--ink-700)", fontSize: 13 }}>
+            <li key={`${event.type}-${event.timestamp}-${index}`} className="item-card">
               {new Date(event.timestamp).toLocaleTimeString()} • {event.type}
             </li>
           ))
         )}
       </ul>
 
-      <form className="auth-form" onSubmit={onAddMember} style={{ marginTop: 18 }}>
+      <form className="auth-form" onSubmit={onAddMember}>
         <label>
           User ID
           <input
@@ -334,20 +334,19 @@ export default function ProjectDetailsPage() {
         </button>
       </form>
 
-      {error ? (
-        <p className="error-text" style={{ marginTop: 12 }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="error-text">{error}</p> : null}
 
       <h2 style={{ fontFamily: "var(--font-heading)", marginTop: 18 }}>Members</h2>
-      <ul style={{ display: "grid", gap: 10, listStyle: "none", marginTop: 10 }}>
+      {members.length === 0 ? (
+        <div className="empty-state">No members in this project yet.</div>
+      ) : null}
+      <ul className="list">
         {members.map((member) => (
-          <li key={member.userId} className="card" style={{ minHeight: "unset", padding: 14 }}>
-            <div style={{ alignItems: "start", display: "grid", gap: 6 }}>
+          <li key={member.userId} className="item-card">
+            <div className="stack">
               <strong>{member.user.name || member.user.email}</strong>
-              <span style={{ color: "var(--ink-700)" }}>{member.user.email}</span>
-              <span style={{ color: "var(--ink-500)", fontSize: 12 }}>
+              <span className="soft">{member.user.email}</span>
+              <span className="meta">
                 {member.role} • {member.userId}
               </span>
               <button
@@ -365,7 +364,7 @@ export default function ProjectDetailsPage() {
 
       <h2 style={{ fontFamily: "var(--font-heading)", marginTop: 22 }}>Tasks</h2>
 
-      <form className="auth-form" onSubmit={onCreateTask} style={{ marginTop: 12 }}>
+      <form className="auth-form" onSubmit={onCreateTask}>
         <label>
           Task title
           <input
@@ -404,23 +403,26 @@ export default function ProjectDetailsPage() {
         </button>
       </form>
 
-      <ul style={{ display: "grid", gap: 10, listStyle: "none", marginTop: 12 }}>
+      {tasks.length === 0 ? (
+        <div className="empty-state">No tasks yet. Create the first task for this project.</div>
+      ) : null}
+      <ul className="list">
         {tasks.map((task) => {
           const busy = taskActionId === task.id;
           const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
 
           return (
-            <li key={task.id} className="card" style={{ minHeight: "unset", padding: 14 }}>
-              <div style={{ display: "grid", gap: 8 }}>
+            <li key={task.id} className="item-card">
+              <div className="stack">
                 <strong>{task.title}</strong>
-                <span style={{ color: "var(--ink-700)" }}>
+                <span className="soft">
                   {task.description || "No description"}
                 </span>
-                <span style={{ color: "var(--ink-500)", fontSize: 12 }}>
+                <span className="meta">
                   version {task.version} • order {task.order}
                 </span>
 
-                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+                <div className="columns-auto">
                   <label>
                     Status
                     <select
@@ -475,7 +477,7 @@ export default function ProjectDetailsPage() {
                   </label>
                 </div>
 
-                <span style={{ color: "var(--ink-700)", fontSize: 13 }}>
+                <span className="soft">
                   Current assignee: {assignee ? assignee.user.name || assignee.user.email : "none"}
                 </span>
 
@@ -492,6 +494,6 @@ export default function ProjectDetailsPage() {
           );
         })}
       </ul>
-    </>
+    </div>
   );
 }

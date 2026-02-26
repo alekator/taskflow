@@ -10,6 +10,26 @@ type EventPayload = {
   timestamp: string;
 };
 
+function toEventPayload(value: unknown): EventPayload | null {
+  if (!value || typeof value !== "object") return null;
+
+  const candidate = value as Partial<EventPayload>;
+  if (
+    typeof candidate.type !== "string" ||
+    typeof candidate.projectId !== "string" ||
+    typeof candidate.timestamp !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    type: candidate.type,
+    projectId: candidate.projectId,
+    payload: candidate.payload,
+    timestamp: candidate.timestamp,
+  };
+}
+
 export function useProjectRealtime(
   projectId: string | undefined,
   onProjectEvent: (event: EventPayload) => void,
@@ -43,12 +63,16 @@ export function useProjectRealtime(
 
       socket.emit("project:join", { projectId });
 
-      const handleProjectEvent = (event: EventPayload) => {
-        onProjectEventRef.current(event);
+      const handleProjectEvent = (event: unknown) => {
+        const parsed = toEventPayload(event);
+        if (!parsed) return;
+        onProjectEventRef.current(parsed);
       };
 
-      const handleTaskEvent = (event: EventPayload) => {
-        onTaskEventRef.current(event);
+      const handleTaskEvent = (event: unknown) => {
+        const parsed = toEventPayload(event);
+        if (!parsed) return;
+        onTaskEventRef.current(parsed);
       };
 
       socket.on("project:event", handleProjectEvent);
