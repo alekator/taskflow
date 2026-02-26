@@ -126,6 +126,19 @@ describe('Projects / Members (e2e)', () => {
       .set(authHeader(accessToken));
   }
 
+  function listProjects(
+    accessToken: string,
+    query?: Record<string, string | number>,
+  ): SupertestTest {
+    const req = request(server)
+      .get(api('/projects'))
+      .set(authHeader(accessToken));
+
+    if (query) req.query(query);
+
+    return req;
+  }
+
   function addMember(
     accessToken: string,
     projectId: string,
@@ -223,7 +236,32 @@ describe('Projects / Members (e2e)', () => {
     ).expect(201);
     const u1 = await login(creds.user1.email, creds.user1.password);
 
-    await listMembers(u1.accessToken, project.id).expect(200);
+    const listed = await listMembers(u1.accessToken, project.id).expect(200);
+    const listedBody = listed.body as {
+      items: Array<{ userId: string }>;
+      meta: { page: number; total: number };
+    };
+    expect(Array.isArray(listedBody.items)).toBe(true);
+    expect(listedBody.meta.page).toBe(1);
+    expect(listedBody.meta.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it('projects: list returns paginated contract', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    await createProject(adminLogin.accessToken, { name: 'Paged Project' });
+
+    const res = await listProjects(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      items: Array<{ id: string; name: string }>;
+      meta: { page: number; limit: number; total: number; totalPages: number };
+    };
+
+    expect(Array.isArray(body.items)).toBe(true);
+    expect(body.items.length).toBeGreaterThanOrEqual(1);
+    expect(body.meta.page).toBe(1);
+    expect(body.meta.limit).toBe(20);
+    expect(body.meta.total).toBeGreaterThanOrEqual(1);
+    expect(body.meta.totalPages).toBeGreaterThanOrEqual(1);
   });
 
   it('members: OWNER can add MEMBER (default role)', async () => {

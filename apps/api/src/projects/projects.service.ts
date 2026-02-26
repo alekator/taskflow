@@ -5,9 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProjectRole } from '@prisma/client';
+import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { ListMembersQueryDto } from './dto/list-members-query.dto';
+import { ListProjectsQueryDto } from './dto/list-projects-query.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 
@@ -53,13 +56,48 @@ export class ProjectsService {
     });
   }
 
-  async findMy(userId: string) {
-    return this.prisma.project.findMany({
-      where: {
-        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+  async findMy(userId: string, query: ListProjectsQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const accessWhere: Prisma.ProjectWhereInput = {
+      OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+    };
+
+    const where: Prisma.ProjectWhereInput = query.search
+      ? {
+          AND: [
+            accessWhere,
+            {
+              OR: [
+                { name: { contains: query.search, mode: 'insensitive' } },
+                {
+                  description: {
+                    contains: query.search,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
+            },
+          ],
+        }
+      : accessWhere;
+
+    const orderBy: Prisma.ProjectOrderByWithRelationInput = {
+      [query.sortBy ?? 'createdAt']: query.sortOrder ?? 'desc',
+    };
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.project.count({ where }),
+      this.prisma.project.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return toPaginatedResult(items, page, limit, total);
   }
 
   async findOne(userId: string, projectId: string) {
@@ -102,19 +140,56 @@ export class ProjectsService {
     return { ok: true };
   }
 
-  async listMembers(requesterId: string, projectId: string) {
+  async listMembers(
+    requesterId: string,
+    projectId: string,
+    query: ListMembersQueryDto,
+  ) {
     await this.requireRole(requesterId, projectId);
 
-    return this.prisma.projectMember.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        userId: true,
-        role: true,
-        createdAt: true,
-        user: { select: { id: true, email: true, name: true, role: true } },
-      },
-    });
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.ProjectMemberWhereInput = {
+      projectId,
+      ...(query.role ? { role: query.role } : {}),
+      ...(query.search
+        ? {
+            user: {
+              OR: [
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { name: { contains: query.search, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'asc';
+
+    const orderBy: Prisma.ProjectMemberOrderByWithRelationInput[] =
+      sortBy === 'createdAt'
+        ? [{ createdAt: sortOrder }]
+        : [{ role: sortOrder }, { createdAt: 'asc' }];
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.projectMember.count({ where }),
+      this.prisma.projectMember.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          userId: true,
+          role: true,
+          createdAt: true,
+          user: { select: { id: true, email: true, name: true, role: true } },
+        },
+      }),
+    ]);
+
+    return toPaginatedResult(items, page, limit, total);
   }
 
   async addMember(requesterId: string, projectId: string, dto: AddMemberDto) {

@@ -3,9 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectRole } from '@prisma/client';
+import { Prisma, ProjectRole } from '@prisma/client';
+import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Injectable()
@@ -49,13 +51,44 @@ export class TasksService {
     });
   }
 
-  async list(userId: string, projectId: string) {
+  async list(userId: string, projectId: string, query: ListTasksQueryDto) {
     await this.getMyProjectRole(userId, projectId);
 
-    return this.prisma.task.findMany({
-      where: { projectId },
-      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
-    });
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.TaskWhereInput = {
+      projectId,
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { title: { contains: query.search, mode: 'insensitive' } },
+              {
+                description: { contains: query.search, mode: 'insensitive' },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const orderBy: Prisma.TaskOrderByWithRelationInput[] = query.sortBy
+      ? [{ [query.sortBy]: query.sortOrder ?? 'asc' }, { createdAt: 'asc' }]
+      : [{ order: 'asc' }, { createdAt: 'asc' }];
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.task.count({ where }),
+      this.prisma.task.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    return toPaginatedResult(items, page, limit, total);
   }
 
   async update(

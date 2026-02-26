@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/request-user.type';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
 
@@ -34,8 +36,12 @@ export class TasksController {
   }
 
   @Get()
-  list(@Req() req: AuthedRequest, @Param('projectId') projectId: string) {
-    return this.tasks.list(req.user.id, projectId);
+  list(
+    @Req() req: AuthedRequest,
+    @Param('projectId') projectId: string,
+    @Query() query: ListTasksQueryDto,
+  ) {
+    return this.tasks.list(req.user.id, projectId, query);
   }
 
   @Patch(':id')

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/request-user.type';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { ListMembersQueryDto } from './dto/list-members-query.dto';
+import { ListProjectsQueryDto } from './dto/list-projects-query.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
@@ -31,16 +34,17 @@ export class ProjectsController {
   }
 
   @Get()
-  findMy(@Req() req: AuthedRequest) {
-    return this.projects.findMy(req.user.id);
+  findMy(@Req() req: AuthedRequest, @Query() query: ListProjectsQueryDto) {
+    return this.projects.findMy(req.user.id, query);
   }
 
   @Get(':projectId/members')
   listMembers(
     @Req() req: AuthedRequest,
     @Param('projectId') projectId: string,
+    @Query() query: ListMembersQueryDto,
   ) {
-    return this.projects.listMembers(req.user.id, projectId);
+    return this.projects.listMembers(req.user.id, projectId, query);
   }
 
   @Post(':projectId/members')

@@ -175,10 +175,18 @@ describe('Tasks (e2e)', () => {
     };
   }
 
-  function listTasks(accessToken: string, projectId: string): SupertestTest {
-    return request(server)
+  function listTasks(
+    accessToken: string,
+    projectId: string,
+    query?: Record<string, string | number>,
+  ): SupertestTest {
+    const req = request(server)
       .get(api(`/projects/${projectId}/tasks`))
       .set(authHeader(accessToken));
+
+    if (query) req.query(query);
+
+    return req;
   }
 
   function updateTask(
@@ -587,7 +595,11 @@ describe('Tasks (e2e)', () => {
     const res = await listTasks(memberLogin.accessToken, project.id).expect(
       200,
     );
-    const tasks = res.body as Array<{ id: string; title: string }>;
+    const body = res.body as {
+      items: Array<{ id: string; title: string }>;
+      meta: { page: number; limit: number; total: number; totalPages: number };
+    };
+    const tasks = body.items;
     const titles = tasks.map((t) => t.title);
 
     expect(titles[0]).toBe('B');
@@ -596,5 +608,53 @@ describe('Tasks (e2e)', () => {
 
     const ids = tasks.map((t) => t.id);
     expect(ids).toEqual([tB.id, tC.id, tA.id]);
+    expect(body.meta.total).toBe(3);
+    expect(body.meta.page).toBe(1);
+  });
+
+  it('tasks: list supports pagination and filters', async () => {
+    const { user1 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const project = await createProject(adminLogin.accessToken);
+
+    await addMember(
+      adminLogin.accessToken,
+      project.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+
+    await createTask(memberLogin.accessToken, project.id, {
+      title: 'Alpha task',
+      status: TaskStatus.TODO,
+    });
+    await createTask(memberLogin.accessToken, project.id, {
+      title: 'Beta task',
+      status: TaskStatus.DONE,
+    });
+
+    const res = await listTasks(memberLogin.accessToken, project.id, {
+      page: 1,
+      limit: 1,
+      search: 'task',
+      status: TaskStatus.DONE,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+    }).expect(200);
+
+    const body = res.body as {
+      items: Array<{ title: string; status: TaskStatus }>;
+      meta: { page: number; limit: number; total: number; totalPages: number };
+    };
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].title).toBe('Beta task');
+    expect(body.items[0].status).toBe(TaskStatus.DONE);
+    expect(body.meta.page).toBe(1);
+    expect(body.meta.limit).toBe(1);
+    expect(body.meta.total).toBe(1);
+    expect(body.meta.totalPages).toBe(1);
   });
 });
