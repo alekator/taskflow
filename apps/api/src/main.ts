@@ -4,13 +4,14 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { getCorsOrigin } from './config/runtime';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(helmet());
 
   app.enableCors({
-    origin: true,
+    origin: getCorsOrigin(),
     credentials: true,
   });
 
