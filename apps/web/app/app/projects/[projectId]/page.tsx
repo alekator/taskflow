@@ -134,6 +134,15 @@ export default function ProjectDetailsPage() {
     [members.length, tasks],
   );
 
+  const memberRoleStats = useMemo(
+    () => ({
+      owners: members.filter((member) => member.role === "OWNER").length,
+      managers: members.filter((member) => member.role === "MANAGER").length,
+      members: members.filter((member) => member.role === "MEMBER").length,
+    }),
+    [members],
+  );
+
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
@@ -791,6 +800,21 @@ export default function ProjectDetailsPage() {
             </div>
           </section>
 
+          <section className="columns-3">
+            <article className="stat-card">
+              <strong>{memberRoleStats.owners}</strong>
+              <p className="soft">Owners</p>
+            </article>
+            <article className="stat-card">
+              <strong>{memberRoleStats.managers}</strong>
+              <p className="soft">Managers</p>
+            </article>
+            <article className="stat-card">
+              <strong>{memberRoleStats.members}</strong>
+              <p className="soft">Members</p>
+            </article>
+          </section>
+
           <section className="projects-layout">
             <aside className="item-card project-create-panel">
               <div className="stack stack-sm">
@@ -836,14 +860,23 @@ export default function ProjectDetailsPage() {
                   {members.map((member) => (
                     <li key={member.userId} className="projects-row">
                       <div className="projects-row-main">
-                        <strong>{member.user.name || member.user.email}</strong>
-                        <span className="meta">{member.userId}</span>
+                        <div className="member-cell">
+                          <div className="member-avatar">
+                            {(member.user.name || member.user.email).slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="member-identity">
+                            <strong>{member.user.name || member.user.email}</strong>
+                            <span className="meta">{member.userId}</span>
+                          </div>
+                        </div>
                       </div>
                       <div className="projects-row-description">
                         <span className="soft">{member.user.email}</span>
                       </div>
                       <div className="projects-row-updated">
-                        <span className="meta">{member.role}</span>
+                        <span className={`badge ${member.role === "OWNER" ? "badge-ok" : "badge-neutral"}`}>
+                          {member.role}
+                        </span>
                       </div>
                       <div className="projects-row-actions">
                         <button className="button button-ghost button-compact" type="button" disabled={memberPending || member.role === "OWNER"} onClick={() => void onRemoveMember(member.userId)}>Remove</button>
@@ -866,6 +899,21 @@ export default function ProjectDetailsPage() {
             </div>
           </section>
 
+          <section className="columns-3">
+            <article className="stat-card">
+              <strong>{events.length}</strong>
+              <p className="soft">Live events</p>
+            </article>
+            <article className="stat-card">
+              <strong>{projectAudit.length}</strong>
+              <p className="soft">Audit entries</p>
+            </article>
+            <article className="stat-card">
+              <strong>{user?.role === "ADMIN" ? "Full" : "Limited"}</strong>
+              <p className="soft">Visibility level</p>
+            </article>
+          </section>
+
           <section className="overview-grid">
             <article className="item-card">
               <div className="panel-header panel-header-inline">
@@ -875,11 +923,14 @@ export default function ProjectDetailsPage() {
               {events.length === 0 ? (
                 <div className="empty-state">No live events yet.</div>
               ) : (
-                <ul className="list">
+                <ul className="activity-feed">
                   {events.map((event, index) => (
-                    <li key={`${event.type}-${event.timestamp}-${index}`} className="workspace-row">
-                      <strong>{event.type}</strong>
-                      <span className="meta">{new Date(event.timestamp).toLocaleString()}</span>
+                    <li key={`${event.type}-${event.timestamp}-${index}`} className="activity-item">
+                      <div className="activity-dot" />
+                      <div className="activity-copy">
+                        <strong>{event.type}</strong>
+                        <p className="meta">{new Date(event.timestamp).toLocaleString()}</p>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -911,14 +962,17 @@ export default function ProjectDetailsPage() {
               ) : null}
 
               {user?.role === "ADMIN" && projectAudit.length > 0 ? (
-                <ul className="list">
+                <ul className="activity-feed">
                   {projectAudit.map((log) => (
-                    <li key={log.id} className="workspace-row">
-                      <div>
+                    <li key={log.id} className="activity-item">
+                      <div className="activity-dot activity-dot-muted" />
+                      <div className="activity-copy">
                         <strong>{log.action}</strong>
-                        <p className="meta">{log.entityType || "system"} - {log.entityId || "n/a"}</p>
+                        <p className="meta">
+                          {log.entityType || "system"} - {log.entityId || "n/a"} - request {log.requestId || "n/a"}
+                        </p>
+                        <p className="meta">{new Date(log.createdAt).toLocaleString()}</p>
                       </div>
-                      <span className="meta">{new Date(log.createdAt).toLocaleString()}</span>
                     </li>
                   ))}
                 </ul>
