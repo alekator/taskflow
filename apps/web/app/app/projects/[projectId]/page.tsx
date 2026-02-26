@@ -27,6 +27,11 @@ import { useProjectRealtime } from "../../../../src/lib/realtime/use-project-rea
 const roles: ProjectRole[] = ["OWNER", "MANAGER", "MEMBER"];
 const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 const taskPriorities: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const taskStatusLabels: Record<TaskStatus, string> = {
+  TODO: "Todo",
+  IN_PROGRESS: "In progress",
+  DONE: "Done",
+};
 
 type RealtimeEvent = {
   type: string;
@@ -59,6 +64,24 @@ export default function ProjectDetailsPage() {
     () => new Map(members.map((member) => [member.userId, member])),
     [members],
   );
+
+  const groupedTasks = useMemo(() => {
+    const groups: Record<TaskStatus, Task[]> = {
+      TODO: [],
+      IN_PROGRESS: [],
+      DONE: [],
+    };
+
+    for (const task of tasks) {
+      groups[task.status].push(task);
+    }
+
+    for (const status of taskStatuses) {
+      groups[status].sort((a, b) => a.order - b.order);
+    }
+
+    return groups;
+  }, [tasks]);
 
   const load = useCallback(async () => {
     if (!projectId) {
@@ -278,6 +301,66 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  const onMoveTaskToStatus = async (task: Task, targetStatus: TaskStatus) => {
+    if (!projectId || task.status === targetStatus) return;
+
+    setTaskActionId(task.id);
+    setError(null);
+
+    try {
+      const targetColumn = groupedTasks[targetStatus];
+      const nextOrder =
+        targetColumn.length > 0
+          ? Math.max(...targetColumn.map((item) => item.order)) + 1
+          : 1;
+
+      await updateProjectTask(projectId, task.id, task.version, {
+        status: targetStatus,
+        order: nextOrder,
+      });
+      await load();
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to move task");
+      }
+    } finally {
+      setTaskActionId(null);
+    }
+  };
+
+  const onMoveTaskWithinStatus = async (task: Task, direction: "up" | "down") => {
+    if (!projectId) return;
+
+    const currentColumn = groupedTasks[task.status];
+    const index = currentColumn.findIndex((item) => item.id === task.id);
+    if (index < 0) return;
+
+    const neighborIndex = direction === "up" ? index - 1 : index + 1;
+    const neighbor = currentColumn[neighborIndex];
+    if (!neighbor) return;
+
+    setTaskActionId(task.id);
+    setError(null);
+
+    try {
+      await Promise.all([
+        updateProjectTask(projectId, task.id, task.version, { order: neighbor.order }),
+        updateProjectTask(projectId, neighbor.id, neighbor.version, { order: task.order }),
+      ]);
+      await load();
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to reorder task");
+      }
+    } finally {
+      setTaskActionId(null);
+    }
+  };
+
   if (loading) {
     return <p className="soft">Loading project...</p>;
   }
@@ -363,6 +446,89 @@ export default function ProjectDetailsPage() {
       </ul>
 
       <h2 style={{ fontFamily: "var(--font-heading)", marginTop: 22 }}>Tasks</h2>
+
+      {tasks.length > 0 ? (
+        <section className="kanban">
+          {taskStatuses.map((status) => (
+            <article key={status} className="kanban-column">
+              <h3>
+                {taskStatusLabels[status]} ({groupedTasks[status].length})
+              </h3>
+
+              {groupedTasks[status].length === 0 ? (
+                <p className="meta">No tasks</p>
+              ) : (
+                <ul className="kanban-list">
+                  {groupedTasks[status].map((task, index) => {
+                    const busy = taskActionId === task.id;
+                    const assignee = task.assigneeId
+                      ? membersById.get(task.assigneeId)
+                      : null;
+
+                    return (
+                      <li key={task.id} className="kanban-item">
+                        <strong>{task.title}</strong>
+                        <span className="meta">
+                          #{task.order} • {task.priority} • v{task.version}
+                        </span>
+                        <span className="soft">
+                          {assignee
+                            ? `Assignee: ${assignee.user.name || assignee.user.email}`
+                            : "Unassigned"}
+                        </span>
+                        <div className="kanban-actions">
+                          <button
+                            className="button-micro"
+                            type="button"
+                            disabled={busy || index === 0}
+                            onClick={() => void onMoveTaskWithinStatus(task, "up")}
+                          >
+                            Up
+                          </button>
+                          <button
+                            className="button-micro"
+                            type="button"
+                            disabled={busy || index === groupedTasks[status].length - 1}
+                            onClick={() => void onMoveTaskWithinStatus(task, "down")}
+                          >
+                            Down
+                          </button>
+                          <button
+                            className="button-micro"
+                            type="button"
+                            disabled={busy || status === "TODO"}
+                            onClick={() =>
+                              void onMoveTaskToStatus(
+                                task,
+                                status === "DONE" ? "IN_PROGRESS" : "TODO",
+                              )
+                            }
+                          >
+                            Left
+                          </button>
+                          <button
+                            className="button-micro"
+                            type="button"
+                            disabled={busy || status === "DONE"}
+                            onClick={() =>
+                              void onMoveTaskToStatus(
+                                task,
+                                status === "TODO" ? "IN_PROGRESS" : "DONE",
+                              )
+                            }
+                          >
+                            Right
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       <form className="auth-form" onSubmit={onCreateTask}>
         <label>
