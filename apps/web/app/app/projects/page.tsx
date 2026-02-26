@@ -96,114 +96,167 @@ export default function ProjectsPage() {
     <div className="stack">
       <header className="panel-header">
         <h1>Projects</h1>
-        <p>Live data from API with pagination, search, and fast create flow.</p>
+        <p>Open an existing workspace or create a new project for your team.</p>
       </header>
 
-      <form className="auth-form" onSubmit={onCreate}>
-        <label>
-          Project name
-          <input
-            data-testid="project-name-input"
-            value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
-            minLength={1}
-            required
-          />
-        </label>
-        <label>
-          Description
-          <input
-            data-testid="project-description-input"
-            value={createDescription}
-            onChange={(e) => setCreateDescription(e.target.value)}
-          />
-        </label>
-        <button
-          data-testid="project-create-submit"
-          className="button button-primary"
-          type="submit"
-          disabled={createPending}
-        >
-          {createPending ? "Creating..." : "Create project"}
-        </button>
-      </form>
+      <section className="projects-layout">
+        <aside className="item-card project-create-panel">
+          <div className="stack stack-sm">
+            <div>
+              <h2>New project</h2>
+              <p className="soft">
+                Start a focused board for a team, client, or internal workflow.
+              </p>
+            </div>
 
-      <div className="toolbar">
-        <input
-          data-testid="project-search-input"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name/description"
-        />
-        <button
-          data-testid="project-search-apply"
-          className="button button-ghost"
-          type="button"
-          onClick={() => {
-            setPage(1);
-            setSubmittedSearch(search.trim());
-          }}
-        >
-          Apply
-        </button>
-      </div>
+            <form className="auth-form auth-form-compact" onSubmit={onCreate}>
+              <label>
+                Project name
+                <input
+                  data-testid="project-name-input"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  minLength={1}
+                  placeholder="Website relaunch"
+                  required
+                />
+              </label>
+              <label>
+                Description
+                <input
+                  data-testid="project-description-input"
+                  value={createDescription}
+                  onChange={(e) => setCreateDescription(e.target.value)}
+                  placeholder="Scope, team, or current objective"
+                />
+              </label>
+              <button
+                data-testid="project-create-submit"
+                className="button button-primary"
+                type="submit"
+                disabled={createPending}
+              >
+                {createPending ? "Creating..." : "Create project"}
+              </button>
+            </form>
+          </div>
+        </aside>
 
-      {error ? <p className="error-text">{error}</p> : null}
-      {loading ? (
-        <div className="stack">
-          <div className="skeleton skeleton-lg" />
-          <div className="skeleton" />
-          <div className="skeleton" />
-        </div>
-      ) : null}
+        <section className="stack">
+          <div className="projects-toolbar">
+            <div>
+              <h2>Project index</h2>
+              <p className="soft">
+                {loading ? "Loading projects..." : `${items.length} shown on this page`}
+              </p>
+            </div>
 
-      {items.length === 0 && !loading ? (
-        <div className="empty-state">
-          No projects found. Create your first project or change filters.
-        </div>
-      ) : null}
+            <div className="toolbar project-searchbar">
+              <input
+                data-testid="project-search-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or description"
+              />
+              <button
+                data-testid="project-search-apply"
+                className="button button-ghost"
+                type="button"
+                onClick={() => {
+                  setPage(1);
+                  setSubmittedSearch(search.trim());
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
 
-      <ul className="list">
-        {items.map((project) => (
-          <li key={project.id} className="item-card" data-testid="project-item">
-            <Link
-              href={`/app/projects/${project.id}`}
-              className="stack"
-              data-testid={`project-link-${project.id}`}
+          {error ? <p className="error-text">{error}</p> : null}
+          {loading ? (
+            <div className="stack">
+              <div className="skeleton skeleton-lg" />
+              <div className="skeleton" />
+              <div className="skeleton" />
+            </div>
+          ) : null}
+
+          {items.length === 0 && !loading ? (
+            <div className="empty-state">
+              No projects found. Create a new one or adjust your filters.
+            </div>
+          ) : null}
+
+          <div className="projects-list-shell">
+            <div className="projects-list-header">
+              <span>Name</span>
+              <span>Description</span>
+              <span>Updated</span>
+              <span>Actions</span>
+            </div>
+
+            <ul className="projects-rows">
+              {items.map((project) => (
+                <li
+                  key={project.id}
+                  className="projects-row"
+                  data-testid="project-item"
+                >
+                  <div className="projects-row-main">
+                    <strong>{project.name}</strong>
+                    <span className="meta">v{project.version}</span>
+                  </div>
+                  <div className="projects-row-description">
+                    <span className="soft">
+                      {project.description || "No description"}
+                    </span>
+                  </div>
+                  <div className="projects-row-updated">
+                    <span className="meta">
+                      {new Date(project.updatedAt).toLocaleDateString()}{" "}
+                      {new Date(project.updatedAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <div className="projects-row-actions">
+                    <Link
+                      href={`/app/projects/${project.id}`}
+                      className="workspace-row-action"
+                      data-testid={`project-link-${project.id}`}
+                    >
+                      Open board
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="toolbar">
+            <button
+              className="button button-ghost"
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             >
-              <strong>{project.name}</strong>
-              <span className="soft">
-                {project.description || "No description"}
-              </span>
-              <span className="meta">
-                version {project.version} • {new Date(project.createdAt).toLocaleString()}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      <div className="toolbar">
-        <button
-          className="button button-ghost"
-          type="button"
-          disabled={page <= 1}
-          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-        >
-          Prev
-        </button>
-        <span className="soft" style={{ fontWeight: 700 }}>
-          Page {page} / {totalPages}
-        </span>
-        <button
-          className="button button-ghost"
-          type="button"
-          disabled={page >= totalPages}
-          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-        >
-          Next
-        </button>
-      </div>
+              Prev
+            </button>
+            <span className="soft" style={{ fontWeight: 700 }}>
+              Page {page} / {totalPages}
+            </span>
+            <button
+              className="button button-ghost"
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </section>
+      </section>
     </div>
   );
 }

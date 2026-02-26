@@ -294,6 +294,10 @@ a {
   gap: 12px;
 }
 
+.stack-sm {
+  gap: 8px;
+}
+
 .toolbar {
   align-items: center;
   display: flex;
@@ -420,6 +424,101 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.projects-layout {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.project-create-panel {
+  position: sticky;
+  top: 14px;
+}
+
+.projects-toolbar {
+  align-items: end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.project-searchbar {
+  min-width: min(460px, 100%);
+}
+
+.projects-list-shell {
+  background: rgb(255 255 255 / 82%);
+  border: 1px solid rgb(17 20 15 / 8%);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.projects-list-header {
+  background: rgb(17 20 15 / 4%);
+  color: var(--ink-500);
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 12px;
+  grid-template-columns: 1.2fr 1.8fr 0.9fr 0.7fr;
+  letter-spacing: 0.04em;
+  padding: 10px 14px;
+  text-transform: uppercase;
+}
+
+.projects-rows {
+  display: grid;
+  list-style: none;
+}
+
+.projects-row {
+  align-items: center;
+  border-top: 1px solid rgb(17 20 15 / 7%);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.2fr 1.8fr 0.9fr 0.7fr;
+  min-height: 68px;
+  padding: 12px 14px;
+}
+
+.projects-row:first-child {
+  border-top: 0;
+}
+
+.projects-row:hover {
+  background: rgb(17 20 15 / 2.5%);
+}
+
+.projects-row-main,
+.projects-row-description,
+.projects-row-updated,
+.projects-row-actions {
+  min-width: 0;
+}
+
+.projects-row-main {
+  display: grid;
+  gap: 2px;
+}
+
+.projects-row-main strong,
+.workspace-row strong {
+  font-size: 0.96rem;
+}
+
+.projects-row-description .soft {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-row-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .readiness-row {
   align-items: center;
   display: flex;
@@ -509,6 +608,10 @@ a {
   display: grid;
   gap: 12px;
   margin-top: 18px;
+}
+
+.auth-form-compact {
+  margin-top: 8px;
 }
 
 .auth-form label {
@@ -734,6 +837,34 @@ a {
 
   .overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .projects-layout,
+  .projects-toolbar,
+  .projects-list-header,
+  .projects-row {
+    grid-template-columns: 1fr;
+  }
+
+  .project-create-panel {
+    position: static;
+  }
+
+  .projects-toolbar {
+    align-items: start;
+    display: grid;
+  }
+
+  .project-searchbar {
+    min-width: 0;
+  }
+
+  .projects-list-header {
+    display: none;
+  }
+
+  .projects-row-actions {
+    justify-content: start;
   }
 
   .workspace-topbar,
