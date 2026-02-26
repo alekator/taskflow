@@ -45,7 +45,7 @@ graph TD
   Realtime --> Client
 ```
 
-## Killer Features
+## Features
 
 ### 1. Tamper-evident audit log
 
@@ -198,18 +198,18 @@ pnpm run dev
 
 ## Environment Variables
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `NODE_ENV` | no | `development` / `test` / `production` |
-| `PORT` | no | HTTP port, default `3001` |
-| `DATABASE_URL` | yes | PostgreSQL connection |
-| `JWT_ACCESS_SECRET` | yes | access token signing secret (min 16 chars) |
-| `JWT_REFRESH_SECRET` | yes | refresh token signing secret (min 16 chars) |
-| `CORS_ORIGINS` | prod yes | comma-separated allowed origins in production |
-| `THROTTLE_TTL_MS` | no | global throttling window |
-| `THROTTLE_LIMIT` | no | global request limit per window |
-| `AUTH_THROTTLE_TTL_MS` | no | auth throttling window |
-| `AUTH_THROTTLE_LIMIT` | no | auth request limit per window |
+| Variable               | Required | Purpose                                       |
+| ---------------------- | -------- | --------------------------------------------- |
+| `NODE_ENV`             | no       | `development` / `test` / `production`         |
+| `PORT`                 | no       | HTTP port, default `3001`                     |
+| `DATABASE_URL`         | yes      | PostgreSQL connection                         |
+| `JWT_ACCESS_SECRET`    | yes      | access token signing secret (min 16 chars)    |
+| `JWT_REFRESH_SECRET`   | yes      | refresh token signing secret (min 16 chars)   |
+| `CORS_ORIGINS`         | prod yes | comma-separated allowed origins in production |
+| `THROTTLE_TTL_MS`      | no       | global throttling window                      |
+| `THROTTLE_LIMIT`       | no       | global request limit per window               |
+| `AUTH_THROTTLE_TTL_MS` | no       | auth throttling window                        |
+| `AUTH_THROTTLE_LIMIT`  | no       | auth request limit per window                 |
 
 ## Contract Examples
 
