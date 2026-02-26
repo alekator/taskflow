@@ -288,6 +288,15 @@ a {
   padding: 0 12px;
 }
 
+.auth-form select {
+  background: rgb(255 255 255 / 90%);
+  border: 1px solid rgb(17 20 15 / 14%);
+  border-radius: var(--radius-sm);
+  color: var(--ink-950);
+  outline: none;
+  padding: 0 12px;
+}
+
 .auth-form input:focus {
   border-color: var(--moss-500);
   box-shadow: 0 0 0 3px rgb(154 199 115 / 20%);
