@@ -25,12 +25,19 @@ describe('TasksService', () => {
   const realtime = {
     emitTaskEvent: jest.fn(),
   };
+  const audit = {
+    log: jest.fn(),
+  };
 
   let service: TasksService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TasksService(prisma as never, realtime as never);
+    service = new TasksService(
+      prisma as never,
+      realtime as never,
+      audit as never,
+    );
   });
 
   it('create auto-assigns task to member author', async () => {

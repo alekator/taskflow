@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProjectRole } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -16,6 +17,7 @@ export class TasksService {
   constructor(
     private prisma: PrismaService,
     private realtime: RealtimeService,
+    private audit: AuditService,
   ) {}
 
   private async getMyProjectRole(userId: string, projectId: string) {
@@ -59,6 +61,15 @@ export class TasksService {
       taskId: created.id,
       assigneeId: created.assigneeId,
       title: created.title,
+    });
+
+    await this.audit.log({
+      action: 'TASK_CREATE',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: created.id,
+      projectId,
+      payload: { title: created.title, assigneeId: created.assigneeId },
     });
 
     return created;
@@ -146,6 +157,15 @@ export class TasksService {
       status: updated.status,
     });
 
+    await this.audit.log({
+      action: 'TASK_UPDATE',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: updated.id,
+      projectId,
+      payload: { title: updated.title, status: updated.status },
+    });
+
     return updated;
   }
 
@@ -166,6 +186,14 @@ export class TasksService {
     this.realtime.emitTaskEvent(projectId, 'task.deleted', {
       actorUserId: userId,
       taskId,
+    });
+
+    await this.audit.log({
+      action: 'TASK_DELETE',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: taskId,
+      projectId,
     });
 
     return { ok: true };
@@ -219,6 +247,15 @@ export class TasksService {
       assigneeId,
     });
 
+    await this.audit.log({
+      action: 'TASK_ASSIGN',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: taskId,
+      projectId,
+      payload: { assigneeId },
+    });
+
     return updated;
   }
 
@@ -242,6 +279,14 @@ export class TasksService {
     this.realtime.emitTaskEvent(projectId, 'task.unassigned', {
       actorUserId: userId,
       taskId,
+    });
+
+    await this.audit.log({
+      action: 'TASK_UNASSIGN',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: taskId,
+      projectId,
     });
 
     return updated;

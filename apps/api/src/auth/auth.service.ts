@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PublicUser = {
@@ -20,6 +21,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private audit: AuditService,
   ) {
     const access = process.env.JWT_ACCESS_SECRET;
     const refresh = process.env.JWT_REFRESH_SECRET;
@@ -98,6 +100,14 @@ export class AuthService {
       name: user.name,
     };
 
+    await this.audit.log({
+      action: 'AUTH_LOGIN',
+      actorUserId: user.id,
+      entityType: 'user',
+      entityId: user.id,
+      payload: { email: user.email },
+    });
+
     return { user: publicUser, accessToken, refreshToken };
   }
 
@@ -131,6 +141,13 @@ export class AuthService {
       data: { refreshJtiHash: newRefreshJtiHash },
     });
 
+    await this.audit.log({
+      action: 'AUTH_REFRESH',
+      actorUserId: user.id,
+      entityType: 'user',
+      entityId: user.id,
+    });
+
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   }
 
@@ -138,6 +155,13 @@ export class AuthService {
     await this.prisma.user.updateMany({
       where: { id: userId },
       data: { refreshJtiHash: null },
+    });
+
+    await this.audit.log({
+      action: 'AUTH_LOGOUT',
+      actorUserId: userId,
+      entityType: 'user',
+      entityId: userId,
     });
 
     return { ok: true };

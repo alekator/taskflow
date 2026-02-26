@@ -7,6 +7,8 @@ Monorepo for a SaaS-style project management platform with a production-focused 
 - Backend core is implemented and tested:
   - JWT auth with refresh rotation (`jti` hash storage)
   - RBAC for projects, members, tasks, assignment
+  - Audit logs for business-significant actions
+  - Request correlation (`x-request-id`) with context metadata
   - Unified exception format
   - Strict request validation
   - Pagination/filter/sort contracts for list endpoints (`items` + `meta`)
@@ -126,3 +128,4 @@ Supported on key endpoints:
 - `GET /api/projects`
 - `GET /api/projects/:projectId/members`
 - `GET /api/projects/:projectId/tasks`
+- `GET /api/audit-logs` (ADMIN only)

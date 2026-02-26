@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProjectRole } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -20,6 +21,7 @@ export class ProjectsService {
   constructor(
     private prisma: PrismaService,
     private realtime: RealtimeService,
+    private audit: AuditService,
   ) {}
 
   private async getProject(projectId: string) {
@@ -63,6 +65,15 @@ export class ProjectsService {
       projectId: project.id,
       actorUserId: userId,
       name: project.name,
+    });
+
+    await this.audit.log({
+      action: 'PROJECT_CREATE',
+      actorUserId: userId,
+      entityType: 'project',
+      entityId: project.id,
+      projectId: project.id,
+      payload: { name: project.name },
     });
 
     return project;
@@ -255,6 +266,15 @@ export class ProjectsService {
         role: member.role,
       });
 
+      await this.audit.log({
+        action: 'PROJECT_MEMBER_ADD',
+        actorUserId: requesterId,
+        entityType: 'project_member',
+        entityId: dto.userId,
+        projectId,
+        payload: { userId: dto.userId, role: member.role },
+      });
+
       return member;
     } catch (e: unknown) {
       if (
@@ -316,6 +336,15 @@ export class ProjectsService {
       role: dto.role,
     });
 
+    await this.audit.log({
+      action: 'PROJECT_MEMBER_ROLE_UPDATE',
+      actorUserId: requesterId,
+      entityType: 'project_member',
+      entityId: targetUserId,
+      projectId,
+      payload: { role: dto.role },
+    });
+
     return updated;
   }
 
@@ -360,6 +389,14 @@ export class ProjectsService {
       userId: targetUserId,
     });
 
+    await this.audit.log({
+      action: 'PROJECT_MEMBER_REMOVE',
+      actorUserId: requesterId,
+      entityType: 'project_member',
+      entityId: targetUserId,
+      projectId,
+    });
+
     return { ok: true };
   }
 
@@ -381,6 +418,14 @@ export class ProjectsService {
 
     this.realtime.emitProjectEvent(projectId, 'member.left', {
       userId,
+    });
+
+    await this.audit.log({
+      action: 'PROJECT_MEMBER_LEAVE',
+      actorUserId: userId,
+      entityType: 'project_member',
+      entityId: userId,
+      projectId,
     });
 
     return { ok: true };

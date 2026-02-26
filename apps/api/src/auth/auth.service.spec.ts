@@ -22,6 +22,9 @@ describe('AuthService', () => {
     sign: jest.fn(),
     verify: jest.fn(),
   } as unknown as JwtService;
+  const audit = {
+    log: jest.fn(),
+  };
 
   let service: AuthService;
 
@@ -29,7 +32,7 @@ describe('AuthService', () => {
     jest.clearAllMocks();
     process.env.JWT_ACCESS_SECRET = 'access-secret-123456';
     process.env.JWT_REFRESH_SECRET = 'refresh-secret-123456';
-    service = new AuthService(prisma as never, jwt);
+    service = new AuthService(prisma as never, jwt, audit as never);
   });
 
   it('login throws Unauthorized when user does not exist', async () => {

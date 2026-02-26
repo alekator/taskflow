@@ -1,10 +1,18 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
+import { RequestContextModule } from './common/request-context.module';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -19,6 +27,7 @@ import { UsersModule } from './users/users.module';
       envFilePath: '.env',
       validate: validateEnv,
     }),
+    RequestContextModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -30,6 +39,7 @@ import { UsersModule } from './users/users.module';
       ],
     }),
     PrismaModule,
+    AuditModule,
     RealtimeModule,
     AuthModule,
     UsersModule,
@@ -39,4 +49,11 @@ import { UsersModule } from './users/users.module';
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestContextMiddleware).forRoutes({
+      path: '*path',
+      method: RequestMethod.ALL,
+    });
+  }
+}
