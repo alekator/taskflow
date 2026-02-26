@@ -22,12 +22,15 @@ describe('TasksService', () => {
     },
     $transaction: jest.fn(),
   };
+  const realtime = {
+    emitTaskEvent: jest.fn(),
+  };
 
   let service: TasksService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new TasksService(prisma as never);
+    service = new TasksService(prisma as never, realtime as never);
   });
 
   it('create auto-assigns task to member author', async () => {
@@ -61,7 +64,7 @@ describe('TasksService', () => {
     prisma.project.findUnique.mockResolvedValueOnce(null);
 
     await expect(
-      service.list('u1', 'missing-project', {}),
+      service.list('u1', 'missing-project', { page: 1, limit: 20 }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -89,7 +92,7 @@ describe('TasksService', () => {
       [{ id: 't1', title: 'Task 1' }],
     ]);
 
-    const result = await service.list('owner', 'p1', {});
+    const result = await service.list('owner', 'p1', { page: 1, limit: 20 });
 
     expect(result.items).toHaveLength(1);
     expect(result.meta.total).toBe(1);

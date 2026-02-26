@@ -6,13 +6,17 @@ import {
 import { Prisma, ProjectRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Injectable()
 export class TasksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtime: RealtimeService,
+  ) {}
 
   private async getMyProjectRole(userId: string, projectId: string) {
     const project = await this.prisma.project.findUnique({
@@ -36,7 +40,7 @@ export class TasksService {
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
     const role = await this.getMyProjectRole(userId, projectId);
 
-    return this.prisma.task.create({
+    const created = await this.prisma.task.create({
       data: {
         title: dto.title,
         description: dto.description,
@@ -49,6 +53,15 @@ export class TasksService {
         assigneeId: role === ProjectRole.MEMBER ? userId : undefined,
       },
     });
+
+    this.realtime.emitTaskEvent(projectId, 'task.created', {
+      actorUserId: userId,
+      taskId: created.id,
+      assigneeId: created.assigneeId,
+      title: created.title,
+    });
+
+    return created;
   }
 
   async list(userId: string, projectId: string, query: ListTasksQueryDto) {
@@ -108,7 +121,7 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: {
         title: dto.title,
@@ -124,6 +137,16 @@ export class TasksService {
               : undefined,
       },
     });
+
+    this.realtime.emitTaskEvent(projectId, 'task.updated', {
+      actorUserId: userId,
+      taskId: updated.id,
+      assigneeId: updated.assigneeId,
+      title: updated.title,
+      status: updated.status,
+    });
+
+    return updated;
   }
 
   async remove(userId: string, projectId: string, taskId: string) {
@@ -139,6 +162,12 @@ export class TasksService {
     }
 
     await this.prisma.task.delete({ where: { id: taskId } });
+
+    this.realtime.emitTaskEvent(projectId, 'task.deleted', {
+      actorUserId: userId,
+      taskId,
+    });
+
     return { ok: true };
   }
 
@@ -179,10 +208,18 @@ export class TasksService {
       if (!member) throw new ForbiddenException('Assignee is not in project');
     }
 
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: { assigneeId },
     });
+
+    this.realtime.emitTaskEvent(projectId, 'task.assigned', {
+      actorUserId: userId,
+      taskId,
+      assigneeId,
+    });
+
+    return updated;
   }
 
   async unassign(userId: string, projectId: string, taskId: string) {
@@ -197,9 +234,16 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException('Task not found');
 
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: { assigneeId: null },
     });
+
+    this.realtime.emitTaskEvent(projectId, 'task.unassigned', {
+      actorUserId: userId,
+      taskId,
+    });
+
+    return updated;
   }
 }

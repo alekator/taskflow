@@ -7,6 +7,7 @@ import {
 import { Prisma, ProjectRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ListMembersQueryDto } from './dto/list-members-query.dto';
@@ -16,7 +17,10 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtime: RealtimeService,
+  ) {}
 
   private async getProject(projectId: string) {
     return this.prisma.project.findUnique({
@@ -41,7 +45,7 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
-    return this.prisma.project.create({
+    const project = await this.prisma.project.create({
       data: {
         name: dto.name,
         description: dto.description,
@@ -54,6 +58,14 @@ export class ProjectsService {
         },
       },
     });
+
+    this.realtime.emitProjectEvent(project.id, 'project.created', {
+      projectId: project.id,
+      actorUserId: userId,
+      name: project.name,
+    });
+
+    return project;
   }
 
   async findMy(userId: string, query: ListProjectsQueryDto) {
@@ -224,7 +236,7 @@ export class ProjectsService {
     if (!user) throw new NotFoundException('User not found');
 
     try {
-      return await this.prisma.projectMember.create({
+      const member = await this.prisma.projectMember.create({
         data: {
           projectId,
           userId: dto.userId,
@@ -236,6 +248,14 @@ export class ProjectsService {
           user: { select: { id: true, email: true, name: true } },
         },
       });
+
+      this.realtime.emitProjectEvent(projectId, 'member.added', {
+        actorUserId: requesterId,
+        userId: dto.userId,
+        role: member.role,
+      });
+
+      return member;
     } catch (e: unknown) {
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -280,7 +300,7 @@ export class ProjectsService {
       if (dto.role !== ProjectRole.MEMBER) throw new ForbiddenException();
     }
 
-    return this.prisma.projectMember.update({
+    const updated = await this.prisma.projectMember.update({
       where: { projectId_userId: { projectId, userId: targetUserId } },
       data: { role: dto.role },
       select: {
@@ -289,6 +309,14 @@ export class ProjectsService {
         user: { select: { id: true, email: true, name: true } },
       },
     });
+
+    this.realtime.emitProjectEvent(projectId, 'member.role_updated', {
+      actorUserId: requesterId,
+      userId: targetUserId,
+      role: dto.role,
+    });
+
+    return updated;
   }
 
   async removeMember(
@@ -327,6 +355,11 @@ export class ProjectsService {
       where: { projectId_userId: { projectId, userId: targetUserId } },
     });
 
+    this.realtime.emitProjectEvent(projectId, 'member.removed', {
+      actorUserId: requesterId,
+      userId: targetUserId,
+    });
+
     return { ok: true };
   }
 
@@ -344,6 +377,10 @@ export class ProjectsService {
 
     await this.prisma.projectMember.delete({
       where: { projectId_userId: { projectId, userId } },
+    });
+
+    this.realtime.emitProjectEvent(projectId, 'member.left', {
+      userId,
     });
 
     return { ok: true };
