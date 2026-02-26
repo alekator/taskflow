@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 type PublicUser = {
@@ -37,9 +38,31 @@ export class AuthService {
 
   private signRefreshToken(user: { id: string }) {
     return this.jwt.sign(
-      { sub: user.id, type: 'refresh' as const },
+      { sub: user.id, type: 'refresh' as const, jti: randomUUID() },
       { secret: this.refreshSecret, expiresIn: '7d' },
     );
+  }
+
+  private verifyRefreshToken(refreshToken: string): {
+    sub: string;
+    type: 'refresh';
+    jti: string;
+  } {
+    let payload: unknown;
+
+    try {
+      payload = this.jwt.verify(refreshToken, { secret: this.refreshSecret });
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    const p = payload as { sub?: string; type?: string; jti?: string };
+
+    if (!p.sub || p.type !== 'refresh' || !p.jti) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    return { sub: p.sub, type: 'refresh', jti: p.jti };
   }
 
   async login(email: string, password: string) {
@@ -56,11 +79,16 @@ export class AuthService {
     });
 
     const refreshToken = this.signRefreshToken({ id: user.id });
-    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+    const { jti } = this.verifyRefreshToken(refreshToken);
+    const refreshJtiHash = await bcrypt.hash(jti, 10);
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { refreshTokenHash },
+      data: {
+        refreshJtiHash,
+        refreshTokenHash: null,
+      },
     });
 
     const publicUser: PublicUser = {
@@ -74,30 +102,18 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    let payload: { sub: string; type?: string };
-
-    try {
-      payload = this.jwt.verify<{ sub: string; type?: string }>(refreshToken, {
-        secret: this.refreshSecret,
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid token');
-    }
-
-    if (payload.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid token');
-    }
+    const payload = this.verifyRefreshToken(refreshToken);
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, refreshTokenHash: true },
+      select: { id: true, email: true, role: true, refreshJtiHash: true },
     });
 
-    if (!user || !user.refreshTokenHash) {
+    if (!user?.refreshJtiHash) {
       throw new UnauthorizedException('Invalid token');
     }
 
-    const ok = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+    const ok = await bcrypt.compare(payload.jti, user.refreshJtiHash);
     if (!ok) throw new UnauthorizedException('Invalid token');
 
     const newAccessToken = this.signAccessToken({
@@ -107,11 +123,12 @@ export class AuthService {
     });
 
     const newRefreshToken = this.signRefreshToken({ id: user.id });
-    const newRefreshTokenHash = await bcrypt.hash(newRefreshToken, 10);
+    const newPayload = this.verifyRefreshToken(newRefreshToken);
+    const newRefreshJtiHash = await bcrypt.hash(newPayload.jti, 10);
 
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { refreshTokenHash: newRefreshTokenHash },
+      data: { refreshJtiHash: newRefreshJtiHash },
     });
 
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
@@ -120,7 +137,7 @@ export class AuthService {
   async logout(userId: string) {
     await this.prisma.user.updateMany({
       where: { id: userId },
-      data: { refreshTokenHash: null },
+      data: { refreshJtiHash: null },
     });
 
     return { ok: true };

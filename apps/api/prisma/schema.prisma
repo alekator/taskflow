@@ -28,6 +28,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   refreshTokenHash String?
+  refreshJtiHash String?
 
   projectsOwned  Project[]       @relation("ProjectOwner")
   tasksAssigned  Task[]          @relation("TaskAssignee")
