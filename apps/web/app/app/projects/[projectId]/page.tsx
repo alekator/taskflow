@@ -74,6 +74,11 @@ export default function ProjectDetailsPage() {
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("MEDIUM");
   const [taskCreatePending, setTaskCreatePending] = useState(false);
   const [taskActionId, setTaskActionId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>("ALL");
 
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [projectAudit, setProjectAudit] = useState<AuditLog[]>([]);
@@ -85,6 +90,23 @@ export default function ProjectDetailsPage() {
     [members],
   );
 
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      const matchesSearch =
+        taskSearch.trim().length === 0 ||
+        task.title.toLowerCase().includes(taskSearch.trim().toLowerCase()) ||
+        (task.description ?? "").toLowerCase().includes(taskSearch.trim().toLowerCase());
+      const matchesStatus =
+        taskStatusFilter === "ALL" || task.status === taskStatusFilter;
+      const matchesPriority =
+        taskPriorityFilter === "ALL" || task.priority === taskPriorityFilter;
+      const matchesAssignee =
+        taskAssigneeFilter === "ALL" || task.assigneeId === taskAssigneeFilter;
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
+    });
+  }, [taskAssigneeFilter, taskPriorityFilter, taskSearch, taskStatusFilter, tasks]);
+
   const groupedTasks = useMemo(() => {
     const groups: Record<TaskStatus, Task[]> = {
       TODO: [],
@@ -92,7 +114,7 @@ export default function ProjectDetailsPage() {
       DONE: [],
     };
 
-    for (const task of tasks) {
+    for (const task of filteredTasks) {
       groups[task.status].push(task);
     }
 
@@ -101,7 +123,7 @@ export default function ProjectDetailsPage() {
     }
 
     return groups;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const projectStats = useMemo(
     () => ({
@@ -110,6 +132,11 @@ export default function ProjectDetailsPage() {
       openCount: tasks.filter((task) => task.status !== "DONE").length,
     }),
     [members.length, tasks],
+  );
+
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [selectedTaskId, tasks],
   );
 
   const load = useCallback(async () => {
@@ -181,6 +208,20 @@ export default function ProjectDetailsPage() {
       void loadActivity();
     }
   }, [currentTab, loadActivity]);
+
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    if (!tasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(null);
+    }
+  }, [selectedTaskId, tasks]);
+
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
+      setSelectedTaskId(null);
+    }
+  }, [filteredTasks, selectedTaskId]);
 
   useProjectRealtime(
     projectId,
@@ -462,7 +503,9 @@ export default function ProjectDetailsPage() {
               <h2>Board</h2>
               <p className="soft">Move tasks across workflow stages and keep assignment visible.</p>
             </div>
-            <p className="meta">Project ID: {projectId || "n/a"}</p>
+            <p className="meta">
+              Project ID: {projectId || "n/a"} - {filteredTasks.length} shown
+            </p>
           </section>
 
           <section className="projects-layout board-layout">
@@ -503,67 +546,169 @@ export default function ProjectDetailsPage() {
             </aside>
 
             <section className="stack">
-              {tasks.length === 0 ? <div className="empty-state">No tasks yet. Create the first task to start the board.</div> : null}
-
-              {tasks.length > 0 ? (
-                <section className="kanban">
-                  {taskStatuses.map((status) => (
-                    <article key={status} className="kanban-column">
-                      <h3>
-                        {taskStatusLabels[status]} ({groupedTasks[status].length})
-                      </h3>
-
-                      {groupedTasks[status].length === 0 ? (
-                        <p className="meta">No tasks</p>
-                      ) : (
-                        <ul className="kanban-list">
-                          {groupedTasks[status].map((task, index) => {
-                            const busy = taskActionId === task.id;
-                            const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
-
-                            return (
-                              <li key={task.id} className="kanban-item">
-                                <strong>{task.title}</strong>
-                                <span className="meta">#{task.order} - {task.priority} - v{task.version}</span>
-                                <span className="soft">{assignee ? `Assignee: ${assignee.user.name || assignee.user.email}` : "Unassigned"}</span>
-                                <div className="kanban-actions">
-                                  <button className="button-micro" type="button" disabled={busy || index === 0} onClick={() => void onMoveTaskWithinStatus(task, "up")}>Up</button>
-                                  <button className="button-micro" type="button" disabled={busy || index === groupedTasks[status].length - 1} onClick={() => void onMoveTaskWithinStatus(task, "down")}>Down</button>
-                                  <button className="button-micro" type="button" disabled={busy || status === "TODO"} onClick={() => void onMoveTaskToStatus(task, status === "DONE" ? "IN_PROGRESS" : "TODO")}>Left</button>
-                                  <button className="button-micro" type="button" disabled={busy || status === "DONE"} onClick={() => void onMoveTaskToStatus(task, status === "TODO" ? "IN_PROGRESS" : "DONE")}>Right</button>
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </article>
-                  ))}
-                </section>
-              ) : null}
-
-              <section className="item-card">
+              <div className="item-card board-filters">
                 <div className="panel-header panel-header-inline">
-                  <h2>Task details</h2>
-                  <span className="meta">Direct edits from workspace</span>
+                  <h2>Filters</h2>
+                  <button
+                    className="button button-ghost button-compact"
+                    type="button"
+                    onClick={() => {
+                      setTaskSearch("");
+                      setTaskStatusFilter("ALL");
+                      setTaskPriorityFilter("ALL");
+                      setTaskAssigneeFilter("ALL");
+                    }}
+                  >
+                    Reset
+                  </button>
                 </div>
 
-                <ul className="list">
-                  {tasks.map((task) => {
-                    const busy = taskActionId === task.id;
-                    const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
+                <div className="columns-auto">
+                  <label>
+                    Search
+                    <input
+                      value={taskSearch}
+                      onChange={(e) => setTaskSearch(e.target.value)}
+                      placeholder="Find by title or description"
+                    />
+                  </label>
 
-                    return (
-                      <li key={task.id} className="item-card" data-testid="task-item">
+                  <label>
+                    Status
+                    <select
+                      value={taskStatusFilter}
+                      onChange={(e) =>
+                        setTaskStatusFilter(e.target.value as "ALL" | TaskStatus)
+                      }
+                    >
+                      <option value="ALL">All statuses</option>
+                      {taskStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {taskStatusLabels[status]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Priority
+                    <select
+                      value={taskPriorityFilter}
+                      onChange={(e) =>
+                        setTaskPriorityFilter(e.target.value as "ALL" | TaskPriority)
+                      }
+                    >
+                      <option value="ALL">All priorities</option>
+                      {taskPriorities.map((priority) => (
+                        <option key={priority} value={priority}>
+                          {priority}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Assignee
+                    <select
+                      value={taskAssigneeFilter}
+                      onChange={(e) => setTaskAssigneeFilter(e.target.value)}
+                    >
+                      <option value="ALL">All assignees</option>
+                      {members.map((member) => (
+                        <option key={member.userId} value={member.userId}>
+                          {member.user.name || member.user.email}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {tasks.length === 0 ? <div className="empty-state">No tasks yet. Create the first task to start the board.</div> : null}
+              {tasks.length > 0 && filteredTasks.length === 0 ? (
+                <div className="empty-state">
+                  No tasks match current filters.
+                </div>
+              ) : null}
+
+              {filteredTasks.length > 0 ? (
+                <section className="board-main-grid">
+                  <section className="kanban">
+                    {taskStatuses.map((status) => (
+                      <article key={status} className="kanban-column">
+                        <h3>
+                          {taskStatusLabels[status]} ({groupedTasks[status].length})
+                        </h3>
+
+                        {groupedTasks[status].length === 0 ? (
+                          <p className="meta">No tasks</p>
+                        ) : (
+                          <ul className="kanban-list">
+                            {groupedTasks[status].map((task, index) => {
+                              const busy = taskActionId === task.id;
+                              const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
+                              const active = selectedTaskId === task.id;
+
+                              return (
+                                <li key={task.id} className={active ? "kanban-item kanban-item-active" : "kanban-item"}>
+                                  <button
+                                    className="kanban-item-trigger"
+                                    type="button"
+                                    onClick={() => setSelectedTaskId(task.id)}
+                                    data-testid={`task-card-${task.id}`}
+                                  >
+                                    <strong>{task.title}</strong>
+                                    <span className="meta">#{task.order} - {task.priority} - v{task.version}</span>
+                                    <span className="soft">
+                                      {assignee ? `Assignee: ${assignee.user.name || assignee.user.email}` : "Unassigned"}
+                                    </span>
+                                  </button>
+                                  <div className="kanban-actions">
+                                    <button className="button-micro" type="button" disabled={busy || index === 0} onClick={() => void onMoveTaskWithinStatus(task, "up")}>Up</button>
+                                    <button className="button-micro" type="button" disabled={busy || index === groupedTasks[status].length - 1} onClick={() => void onMoveTaskWithinStatus(task, "down")}>Down</button>
+                                    <button className="button-micro" type="button" disabled={busy || status === "TODO"} onClick={() => void onMoveTaskToStatus(task, status === "DONE" ? "IN_PROGRESS" : "TODO")}>Left</button>
+                                    <button className="button-micro" type="button" disabled={busy || status === "DONE"} onClick={() => void onMoveTaskToStatus(task, status === "TODO" ? "IN_PROGRESS" : "DONE")}>Right</button>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+
+                  <aside className="task-drawer">
+                    {selectedTask ? (
+                      <div className="task-drawer-card" data-testid="task-item">
+                        <div className="panel-header panel-header-inline">
+                          <div>
+                            <h2>{selectedTask.title}</h2>
+                            <p className="meta">version {selectedTask.version} - order {selectedTask.order}</p>
+                          </div>
+                          <button
+                            className="button button-ghost button-compact"
+                            type="button"
+                            onClick={() => setSelectedTaskId(null)}
+                          >
+                            Close
+                          </button>
+                        </div>
+
                         <div className="stack">
-                          <strong>{task.title}</strong>
-                          <span className="soft">{task.description || "No description"}</span>
-                          <span className="meta">version {task.version} - order {task.order}</span>
+                          <p className="soft">{selectedTask.description || "No description"}</p>
 
                           <div className="columns-auto">
                             <label>
                               Status
-                              <select value={task.status} onChange={(e) => void onChangeTaskStatus(task, e.target.value as TaskStatus)} disabled={busy} style={{ minHeight: 40 }}>
+                              <select
+                                value={selectedTask.status}
+                                onChange={(e) =>
+                                  void onChangeTaskStatus(selectedTask, e.target.value as TaskStatus)
+                                }
+                                disabled={taskActionId === selectedTask.id}
+                                style={{ minHeight: 40 }}
+                              >
                                 {taskStatuses.map((status) => (
                                   <option key={status} value={status}>{status}</option>
                                 ))}
@@ -572,7 +717,14 @@ export default function ProjectDetailsPage() {
 
                             <label>
                               Priority
-                              <select value={task.priority} onChange={(e) => void onChangeTaskPriority(task, e.target.value as TaskPriority)} disabled={busy} style={{ minHeight: 40 }}>
+                              <select
+                                value={selectedTask.priority}
+                                onChange={(e) =>
+                                  void onChangeTaskPriority(selectedTask, e.target.value as TaskPriority)
+                                }
+                                disabled={taskActionId === selectedTask.id}
+                                style={{ minHeight: 40 }}
+                              >
                                 {taskPriorities.map((priority) => (
                                   <option key={priority} value={priority}>{priority}</option>
                                 ))}
@@ -581,26 +733,50 @@ export default function ProjectDetailsPage() {
 
                             <label>
                               Assignee
-                              <select value={task.assigneeId || ""} onChange={(e) => void onAssignTask(task, e.target.value)} disabled={busy} style={{ minHeight: 40 }}>
+                              <select
+                                value={selectedTask.assigneeId || ""}
+                                onChange={(e) => void onAssignTask(selectedTask, e.target.value)}
+                                disabled={taskActionId === selectedTask.id}
+                                style={{ minHeight: 40 }}
+                              >
                                 <option value="">Unassigned</option>
                                 {members.map((member) => (
-                                  <option key={member.userId} value={member.userId}>{member.user.name || member.user.email} ({member.role})</option>
+                                  <option key={member.userId} value={member.userId}>
+                                    {member.user.name || member.user.email} ({member.role})
+                                  </option>
                                 ))}
                               </select>
                             </label>
                           </div>
 
-                          <span className="soft">Current assignee: {assignee ? assignee.user.name || assignee.user.email : "none"}</span>
+                          <div className="task-drawer-meta">
+                            <span className="meta">Created {new Date(selectedTask.createdAt).toLocaleString()}</span>
+                            <span className="meta">Updated {new Date(selectedTask.updatedAt).toLocaleString()}</span>
+                            <span className="meta">Project {selectedTask.projectId}</span>
+                          </div>
 
-                          <button data-testid={`task-delete-${task.id}`} className="button button-ghost" type="button" disabled={busy} onClick={() => void onDeleteTask(task)}>
-                            {busy ? "Working..." : "Delete task"}
+                          <button
+                            data-testid={`task-delete-${selectedTask.id}`}
+                            className="button button-ghost"
+                            type="button"
+                            disabled={taskActionId === selectedTask.id}
+                            onClick={() => void onDeleteTask(selectedTask)}
+                          >
+                            {taskActionId === selectedTask.id ? "Working..." : "Delete task"}
                           </button>
                         </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
+                      </div>
+                    ) : (
+                      <div className="task-drawer-empty">
+                        <h2>Task details</h2>
+                        <p className="soft">
+                          Select a card on the board to inspect and update status, priority, assignee, and metadata.
+                        </p>
+                      </div>
+                    )}
+                  </aside>
+                </section>
+              ) : null}
             </section>
           </section>
         </div>

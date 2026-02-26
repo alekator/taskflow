@@ -402,6 +402,22 @@ a {
   padding: 10px;
 }
 
+.kanban-item-active {
+  border-color: rgb(202 102 58 / 45%);
+  box-shadow: 0 0 0 2px rgb(202 102 58 / 12%);
+}
+
+.kanban-item-trigger {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
 .kanban-actions {
   display: flex;
   flex-wrap: wrap;
@@ -523,6 +539,13 @@ a {
   grid-template-columns: 320px minmax(0, 1fr);
 }
 
+.board-main-grid {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
 .project-header {
   align-items: start;
   display: grid;
@@ -586,6 +609,33 @@ a {
   display: flex;
   gap: 12px;
   justify-content: space-between;
+}
+
+.board-filters {
+  gap: 12px;
+}
+
+.task-drawer {
+  position: sticky;
+  top: 14px;
+}
+
+.task-drawer-card,
+.task-drawer-empty {
+  background: rgb(255 255 255 / 88%);
+  border: 1px solid rgb(17 20 15 / 8%);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.task-drawer-card {
+  display: grid;
+  gap: 12px;
+}
+
+.task-drawer-meta {
+  display: grid;
+  gap: 4px;
 }
 
 .readiness-row {
@@ -910,6 +960,7 @@ a {
 
   .projects-layout,
   .projects-toolbar,
+  .board-main-grid,
   .project-header,
   .projects-list-header,
   .projects-row {
@@ -917,6 +968,10 @@ a {
   }
 
   .project-create-panel {
+    position: static;
+  }
+
+  .task-drawer {
     position: static;
   }
 
