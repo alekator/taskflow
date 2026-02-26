@@ -519,6 +519,75 @@ a {
   justify-content: flex-end;
 }
 
+.board-layout {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.project-header {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.project-header-main {
+  display: grid;
+  gap: 8px;
+}
+
+.project-breadcrumbs {
+  align-items: center;
+  color: var(--ink-500);
+  display: flex;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.project-breadcrumbs a:hover {
+  color: var(--ink-950);
+}
+
+.project-meta-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.project-tabs {
+  align-items: center;
+  border-bottom: 1px solid rgb(17 20 15 / 8%);
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.project-tab {
+  border-radius: 10px;
+  color: var(--ink-700);
+  font-size: 0.92rem;
+  font-weight: 700;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.project-tab:hover {
+  background: rgb(17 20 15 / 5%);
+  color: var(--ink-950);
+}
+
+.project-tab-active {
+  background: #202631;
+  color: #f5f7fb;
+}
+
+.board-toolbar {
+  align-items: end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .readiness-row {
   align-items: center;
   display: flex;
@@ -841,6 +910,7 @@ a {
 
   .projects-layout,
   .projects-toolbar,
+  .project-header,
   .projects-list-header,
   .projects-row {
     grid-template-columns: 1fr;
@@ -851,6 +921,11 @@ a {
   }
 
   .projects-toolbar {
+    align-items: start;
+    display: grid;
+  }
+
+  .board-toolbar {
     align-items: start;
     display: grid;
   }
