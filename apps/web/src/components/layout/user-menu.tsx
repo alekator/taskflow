@@ -7,9 +7,12 @@ export function UserMenu() {
 
   return (
     <div className="user-menu">
-      <span>{user?.email ?? "Unknown user"}</span>
-      <button type="button" className="button button-ghost" onClick={() => void logout()}>
-        Logout
+      <div className="user-menu-meta">
+        <strong>{user?.name ?? "Workspace user"}</strong>
+        <span>{user?.email ?? "Unknown user"}</span>
+      </div>
+      <button type="button" className="button button-ghost button-compact" onClick={() => void logout()}>
+        Sign out
       </button>
     </div>
   );
