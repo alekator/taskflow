@@ -25,6 +25,8 @@ const GRID = 120;
 const SAVE_MS = 900;
 const ZOOM_MIN = 0.35;
 const ZOOM_MAX = 2.4;
+const IMAGE_MAX_EDGE = 1600;
+const IMAGE_JPEG_QUALITY = 0.82;
 
 const id = (p: string) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
@@ -73,6 +75,39 @@ function hit(el: TaskRoadmapElement, x: number, y: number, tol: number) {
     }
   }
   return false;
+}
+
+async function optimizeImageFile(file: File): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Unable to read image"));
+      img.src = objectUrl;
+    });
+
+    const srcW = Math.max(1, image.naturalWidth || image.width);
+    const srcH = Math.max(1, image.naturalHeight || image.height);
+    const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(srcW, srcH));
+    const width = Math.max(1, Math.round(srcW * scale));
+    const height = Math.max(1, Math.round(srcH * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to process image");
+
+    ctx.drawImage(image, 0, 0, width, height);
+
+    if (file.type === "image/png") {
+      return canvas.toDataURL("image/png");
+    }
+    return canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
@@ -483,20 +518,23 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
   };
 
   const uploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(String(fr.result));
-      fr.onerror = () => reject(fr.error);
-      fr.readAsDataURL(file);
-    });
-    patchDoc((prev) => {
-      const cx = (-prev.viewport.x + 460) / prev.viewport.zoom;
-      const cy = (-prev.viewport.y + 280) / prev.viewport.zoom;
-      return { ...prev, elements: [...prev.elements, { id: id("img"), type: "image", x: cx - 180, y: cy - 100, width: 360, height: 200, imageDataUrl: dataUrl }] };
-    });
-    e.target.value = "";
+    try {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const dataUrl = await optimizeImageFile(file);
+      setError(null);
+
+      patchDoc((prev) => {
+        const cx = (-prev.viewport.x + 460) / prev.viewport.zoom;
+        const cy = (-prev.viewport.y + 280) / prev.viewport.zoom;
+        return { ...prev, elements: [...prev.elements, { id: id("img"), type: "image", x: cx - 180, y: cy - 100, width: 360, height: 200, imageDataUrl: dataUrl }] };
+      });
+    } catch (err) {
+      setError(getErrorDetails(err).message);
+    } finally {
+      e.target.value = "";
+    }
   };
 
   const clear = () => {
