@@ -30,19 +30,26 @@ test("create project and task, then move task in kanban", async ({ page }) => {
   await page.getByTestId("project-description-input").fill("Playwright project");
   await page.getByTestId("project-create-submit").click();
 
-  await expect(page.getByText(projectName)).toBeVisible();
-  await page.getByText(projectName).first().click();
+  const projectRow = page.getByTestId("project-item").filter({ hasText: projectName }).first();
+  await expect(projectRow).toBeVisible();
+  await projectRow.getByRole("link", { name: "Open board" }).click();
 
+  await expect(page).toHaveURL(/\/app\/projects\/.+/);
   await expect(page.getByRole("heading", { name: projectName })).toBeVisible();
 
+  await page.getByTestId("task-create-open").click();
   await page.getByTestId("task-title-input").fill(taskName);
   await page.getByTestId("task-description-input").fill("Task from e2e");
-  await page.getByRole("button", { name: "Create task" }).click();
+  await page.getByTestId("task-create-submit").click();
 
-  const taskCard = page.locator(".kanban-item", { hasText: taskName }).first();
+  const taskCard = page.getByTestId(/task-card-/).filter({ hasText: taskName }).first();
   await expect(taskCard).toBeVisible();
 
-  await taskCard.getByRole("button", { name: "Right" }).click();
-  await expect(page.getByText("In progress")).toBeVisible();
-  await expect(page.locator(".kanban-column", { hasText: "In progress" }).getByText(taskName)).toBeVisible();
+  await taskCard.dragTo(page.getByTestId("kanban-column-in_progress"));
+  await expect(page.getByTestId("kanban-column-in_progress").getByText(taskName)).toBeVisible();
+
+  await page.getByTestId("kanban-column-in_progress").getByText(taskName).first().dragTo(
+    page.getByTestId("kanban-column-testing"),
+  );
+  await expect(page.getByTestId("kanban-column-testing").getByText(taskName)).toBeVisible();
 });
