@@ -139,6 +139,29 @@ export class TasksService {
     return toPaginatedResult(items, page, limit, total);
   }
 
+  async findWorkspaceTaskById(
+    userId: string,
+    userRole: string,
+    taskId: string,
+  ) {
+    const task = await this.prisma.task.findFirst({
+      where: {
+        AND: [{ id: taskId }, this.buildWorkspaceAccessWhere(userId, userRole)],
+      },
+      include: {
+        project: {
+          select: { id: true, name: true },
+        },
+        assignee: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    });
+
+    if (!task) throw new NotFoundException('Task not found');
+    return task;
+  }
+
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
     const role = await this.getMyProjectRole(userId, projectId);
     const assigneeId =

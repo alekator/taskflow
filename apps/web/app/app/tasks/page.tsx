@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   listWorkspaceTasks,
   type TaskPriority,
@@ -48,6 +49,7 @@ function assigneeLabel(task: WorkspaceTask) {
 }
 
 export default function TasksPage() {
+  const router = useRouter();
   const [items, setItems] = useState<WorkspaceTask[]>([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -221,7 +223,19 @@ export default function TasksPage() {
       {items.length > 0 ? (
         <section className="workspace-task-list">
           {items.map((task) => (
-            <article className="item-card workspace-task-card" key={task.id}>
+            <article
+              className="item-card workspace-task-card workspace-task-card-clickable"
+              key={task.id}
+              role="button"
+              tabIndex={0}
+              onMouseUp={() => router.push(`/app/tasks/${task.id}`)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  router.push(`/app/tasks/${task.id}`);
+                }
+              }}
+            >
               <div className="workspace-task-card-main">
                 <div className="workspace-task-title-row">
                   <strong>{task.title}</strong>
@@ -231,7 +245,13 @@ export default function TasksPage() {
                 </div>
                 <p className="workspace-task-project">
                   Project:{" "}
-                  <Link href={`/app/projects/${task.project.id}`} className="workspace-row-action">
+                  <Link
+                    href={`/app/projects/${task.project.id}`}
+                    className="workspace-row-action"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onMouseUp={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     {task.project.name}
                   </Link>
                 </p>
@@ -255,6 +275,9 @@ export default function TasksPage() {
                 <Link
                   href={`/app/projects/${task.project.id}?tab=board`}
                   className="workspace-row-action"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onMouseUp={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
                 >
                   Open board
                 </Link>

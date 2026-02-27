@@ -70,6 +70,10 @@ export async function listWorkspaceTasks(params?: {
   return authFetch<PaginatedResponse<WorkspaceTask>>(`/tasks${query}`);
 }
 
+export async function getWorkspaceTask(taskId: string): Promise<WorkspaceTask> {
+  return authFetch<WorkspaceTask>(`/tasks/${taskId}`);
+}
+
 export async function createProjectTask(
   projectId: string,
   input: {

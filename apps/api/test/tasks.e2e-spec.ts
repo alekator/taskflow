@@ -215,6 +215,15 @@ describe('Tasks (e2e)', () => {
     return req;
   }
 
+  function getWorkspaceTask(
+    accessToken: string,
+    taskId: string,
+  ): SupertestTest {
+    return request(server)
+      .get(api(`/tasks/${taskId}`))
+      .set(authHeader(accessToken));
+  }
+
   function updateTask(
     accessToken: string,
     projectId: string,
@@ -919,5 +928,53 @@ describe('Tasks (e2e)', () => {
     expect(managerBody.meta.total).toBe(1);
     expect(managerBody.items[0].title).toBe('Visible task');
     expect(managerBody.items[0].projectId).toBe(visibleProject.id);
+  });
+
+  it('tasks workspace: GET /tasks/:id is scoped by visibility', async () => {
+    const { user1, user3 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const visibleProject = await createProject(adminLogin.accessToken, {
+      name: 'Visible Task Project',
+    });
+    const hiddenProject = await createProject(adminLogin.accessToken, {
+      name: 'Hidden Task Project',
+    });
+
+    await addMember(
+      adminLogin.accessToken,
+      visibleProject.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+    await addMember(
+      adminLogin.accessToken,
+      hiddenProject.id,
+      user3.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    const visibleTask = await createTask(
+      adminLogin.accessToken,
+      visibleProject.id,
+      {
+        title: 'Visible by membership',
+        assigneeId: user1.id,
+      },
+    );
+    const hiddenTask = await createTask(
+      adminLogin.accessToken,
+      hiddenProject.id,
+      {
+        title: 'Hidden from user1',
+        assigneeId: user3.id,
+      },
+    );
+
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+
+    await getWorkspaceTask(memberLogin.accessToken, visibleTask.id).expect(200);
+    await getWorkspaceTask(memberLogin.accessToken, hiddenTask.id).expect(404);
+    await getWorkspaceTask(adminLogin.accessToken, hiddenTask.id).expect(200);
   });
 });

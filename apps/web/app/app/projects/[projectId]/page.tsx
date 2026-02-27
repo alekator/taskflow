@@ -53,6 +53,12 @@ type DropIndicator = {
   index: number;
 } | null;
 
+type TaskCardPointerState = {
+  taskId: string;
+  x: number;
+  y: number;
+} | null;
+
 type MoveProjection = {
   nextTasks: Task[];
   updates: Array<{
@@ -187,6 +193,9 @@ export default function ProjectDetailsPage() {
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>("ALL");
   const [dragState, setDragState] = useState<DragState>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
+  const [taskCardPointerState, setTaskCardPointerState] =
+    useState<TaskCardPointerState>(null);
+  const [didDragTaskCard, setDidDragTaskCard] = useState(false);
 
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [projectAudit, setProjectAudit] = useState<AuditLog[]>([]);
@@ -478,6 +487,7 @@ export default function ProjectDetailsPage() {
   };
 
   const onDragStartTask = (event: React.DragEvent<HTMLElement>, task: Task) => {
+    setDidDragTaskCard(true);
     setDragState({ taskId: task.id, fromStatus: task.status });
     setDropIndicator({
       status: task.status,
@@ -485,6 +495,37 @@ export default function ProjectDetailsPage() {
     });
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", task.id);
+  };
+
+  const onTaskCardMouseDown = (
+    event: React.MouseEvent<HTMLElement>,
+    taskId: string,
+  ) => {
+    if (event.button !== 0) return;
+    setTaskCardPointerState({ taskId, x: event.clientX, y: event.clientY });
+    setDidDragTaskCard(false);
+  };
+
+  const onTaskCardMouseUp = (
+    event: React.MouseEvent<HTMLElement>,
+    task: Task,
+  ) => {
+    if (!taskCardPointerState || taskCardPointerState.taskId !== task.id) {
+      return;
+    }
+
+    const dx = Math.abs(event.clientX - taskCardPointerState.x);
+    const dy = Math.abs(event.clientY - taskCardPointerState.y);
+    const moved = dx > 6 || dy > 6;
+
+    setTaskCardPointerState(null);
+
+    if (didDragTaskCard || moved) {
+      setDidDragTaskCard(false);
+      return;
+    }
+
+    router.push(`/app/tasks/${task.id}`);
   };
 
   const onDragOverZone = (
@@ -756,8 +797,17 @@ export default function ProjectDetailsPage() {
                                   <article
                                     className="kanban-item kanban-item-dense"
                                     draggable={!busy}
+                                    onMouseDown={(event) =>
+                                      onTaskCardMouseDown(event, task.id)
+                                    }
+                                    onMouseUp={(event) =>
+                                      onTaskCardMouseUp(event, task)
+                                    }
                                     onDragStart={(event) => onDragStartTask(event, task)}
-                                    onDragEnd={clearDragState}
+                                    onDragEnd={() => {
+                                      clearDragState();
+                                      setTaskCardPointerState(null);
+                                    }}
                                     data-testid={`task-card-${task.id}`}
                                   >
                                     <div className="kanban-item-trigger">

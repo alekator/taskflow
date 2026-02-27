@@ -95,4 +95,9 @@ export class WorkspaceTasksController {
   list(@Req() req: AuthedRequest, @Query() query: ListTasksQueryDto) {
     return this.tasks.listWorkspace(req.user.id, req.user.role, query);
   }
+
+  @Get(':id')
+  findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.tasks.findWorkspaceTaskById(req.user.id, req.user.role, id);
+  }
 }
