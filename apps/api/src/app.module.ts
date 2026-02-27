@@ -9,6 +9,7 @@ import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { AssistantModule } from './assistant/assistant.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
@@ -41,6 +42,7 @@ import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
       ],
     }),
     PrismaModule,
+    AssistantModule,
     AuditModule,
     IdempotencyModule,
     RealtimeModule,

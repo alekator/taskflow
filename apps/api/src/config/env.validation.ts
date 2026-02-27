@@ -33,6 +33,22 @@ function parseIntOrDefault(
   return parsed;
 }
 
+function parseNumberOrDefault(
+  env: EnvMap,
+  key: string,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const raw = asString(env[key]);
+  if (!raw) return fallback;
+  const parsed = Number.parseFloat(raw);
+  if (Number.isNaN(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${key} must be a number in range [${min}, ${max}]`);
+  }
+  return parsed;
+}
+
 function parseNodeEnv(env: EnvMap): NodeEnv {
   const raw = asString(env.NODE_ENV) ?? 'development';
   if (raw === 'development' || raw === 'test' || raw === 'production') {
@@ -74,6 +90,33 @@ export function validateEnv(config: EnvMap) {
       config,
       'AUTH_THROTTLE_LIMIT',
       nodeEnv === 'test' ? 999_999 : 10,
+    ),
+    ASSISTANT_OPENAI_API_KEY: asString(config.ASSISTANT_OPENAI_API_KEY) ?? '',
+    ASSISTANT_OPENAI_MODEL:
+      asString(config.ASSISTANT_OPENAI_MODEL) ?? 'gpt-4o-mini',
+    ASSISTANT_OPENAI_BASE_URL:
+      asString(config.ASSISTANT_OPENAI_BASE_URL) ?? 'https://api.openai.com/v1',
+    ASSISTANT_DAILY_LIMIT: parseIntOrDefault(
+      config,
+      'ASSISTANT_DAILY_LIMIT',
+      25,
+    ),
+    ASSISTANT_MAX_OUTPUT_TOKENS: parseIntOrDefault(
+      config,
+      'ASSISTANT_MAX_OUTPUT_TOKENS',
+      350,
+    ),
+    ASSISTANT_LLM_TIMEOUT_MS: parseIntOrDefault(
+      config,
+      'ASSISTANT_LLM_TIMEOUT_MS',
+      15_000,
+    ),
+    ASSISTANT_TEMPERATURE: parseNumberOrDefault(
+      config,
+      'ASSISTANT_TEMPERATURE',
+      0.2,
+      0,
+      2,
     ),
   };
 

@@ -12,6 +12,7 @@ Production-style NestJS backend for collaborative project and task management.
 - optimistic concurrency control for critical updates/deletes (`If-Match`)
 - request correlation (`x-request-id`) across logs/audit entries
 - realtime delivery (Socket.IO rooms per project)
+- hybrid workspace assistant (`OpenAI` via env key + free basic mode)
 - unified API error contract with Prisma error mapping
 - tested behavior with unit + e2e suites
 
@@ -153,7 +154,10 @@ Base prefix: `/api`
   - `PATCH /projects/:projectId/tasks/:id/assign`
   - `PATCH /projects/:projectId/tasks/:id/unassign`
 - audit:
-  - `GET /audit-logs` (ADMIN only)
+- `GET /audit-logs` (ADMIN only)
+- assistant:
+  - `GET /assistant/history`
+  - `POST /assistant/messages`
 
 Full contract: Swagger UI.
 
@@ -208,11 +212,34 @@ pnpm run dev
 | `JWT_REFRESH_SECRET`   | yes      | refresh token signing secret (min 16 chars)   |
 | `AUTH_MANAGER_INVITE_CODE` | no  | invite code for self-registration as `MANAGER` |
 | `AUTH_ADMIN_INVITE_CODE`   | no  | invite code for self-registration as `ADMIN`   |
+| `ASSISTANT_OPENAI_API_KEY` | no  | enables full LLM assistant mode                |
+| `ASSISTANT_OPENAI_MODEL`   | no  | model name for assistant LLM mode              |
+| `ASSISTANT_OPENAI_BASE_URL`| no  | OpenAI-compatible base URL                     |
+| `ASSISTANT_DAILY_LIMIT`    | no  | per-user daily LLM reply limit                 |
+| `ASSISTANT_MAX_OUTPUT_TOKENS` | no | max completion tokens for LLM replies       |
+| `ASSISTANT_LLM_TIMEOUT_MS` | no  | LLM request timeout in ms                      |
+| `ASSISTANT_TEMPERATURE`    | no  | LLM temperature (`0..2`)                       |
 | `CORS_ORIGINS`         | prod yes | comma-separated allowed origins in production |
 | `THROTTLE_TTL_MS`      | no       | global throttling window                      |
 | `THROTTLE_LIMIT`       | no       | global request limit per window               |
 | `AUTH_THROTTLE_TTL_MS` | no       | auth throttling window                        |
 | `AUTH_THROTTLE_LIMIT`  | no       | auth request limit per window                 |
+
+## Workspace Assistant Modes
+
+TaskFlow assistant supports two modes:
+
+1. Basic mode (free, default):
+   - works without external API key
+   - returns useful workspace insights from your own data (task counts, statuses, latest updates, etc.)
+   - no token costs
+
+2. LLM mode (optional, user-provided key):
+   - enabled when `ASSISTANT_OPENAI_API_KEY` is set
+   - uses configured model/base URL and respects daily limits
+   - when limit is reached or provider is unavailable, assistant automatically falls back to basic mode
+
+This allows teams to run TaskFlow with zero assistant cost by default, and opt in to richer answers when they want.
 
 ## Contract Examples
 
@@ -255,6 +282,17 @@ curl -X PATCH "http://localhost:3001/api/projects/<projectId>/tasks/<taskId>" \
 ```
 
 If server-side version is not `3`, response is `412 Precondition Failed`.
+
+### Assistant message
+
+```bash
+curl -X POST "http://localhost:3001/api/assistant/messages" \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"How many open tasks do I have?"}'
+```
+
+Response includes both saved user message and assistant reply, plus mode info (`BASIC` or `LLM`).
 
 ## Scripts
 

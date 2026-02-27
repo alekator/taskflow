@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { RequireAuth } from "../../src/components/auth/require-auth";
+import { WorkspaceAssistant } from "../../src/components/assistant/workspace-assistant";
 import { AppSidebarNav } from "../../src/components/layout/app-sidebar-nav";
 import { UserMenu } from "../../src/components/layout/user-menu";
 import {
@@ -32,6 +33,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <section className="panel workspace-panel">{children}</section>
           </div>
         </main>
+        <WorkspaceAssistant />
       </div>
     </RequireAuth>
   );
