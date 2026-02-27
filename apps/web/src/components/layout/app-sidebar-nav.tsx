@@ -8,6 +8,7 @@ const items = [
   { href: "/app", label: "Overview", adminOnly: false },
   { href: "/app/projects", label: "Projects", adminOnly: false },
   { href: "/app/tasks", label: "Tasks", adminOnly: false },
+  { href: "/app/users", label: "Users", adminOnly: false },
   { href: "/app/audit", label: "Activity", adminOnly: true },
 ] as const;
 
