@@ -18,7 +18,7 @@ export default function LoginPage() {
             <article className="panel auth-panel">
               <h1>Sign in</h1>
               <p>
-                Access your workspace, open project boards, and continue active work.
+                Open your workspace and continue active project work.
               </p>
               <Suspense fallback={<p className="soft">Loading auth form...</p>}>
                 <LoginForm />
@@ -28,7 +28,7 @@ export default function LoginPage() {
             <aside className="item-card login-aside">
               <h2>Local access</h2>
               <p className="soft">
-                Seeded admin credentials are available for local development.
+                Seeded admin credentials for local development.
               </p>
               <div className="login-credentials">
                 <span className="meta">Email</span>
@@ -37,7 +37,7 @@ export default function LoginPage() {
                 <strong>123456</strong>
               </div>
               <p className="meta">
-                After sign in you will land in the main workspace at <code>/app</code>.
+                After sign in you land in <code>/app</code>.
               </p>
             </aside>
           </section>

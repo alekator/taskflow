@@ -3,6 +3,10 @@ import Link from "next/link";
 import { RequireAuth } from "../../src/components/auth/require-auth";
 import { AppSidebarNav } from "../../src/components/layout/app-sidebar-nav";
 import { UserMenu } from "../../src/components/layout/user-menu";
+import {
+  WorkspaceContextMeta,
+  WorkspaceTopbarLinks,
+} from "../../src/components/layout/workspace-topbar-meta";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
@@ -13,19 +17,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Link href="/app" className="brand brand-light">
               TaskFlow
             </Link>
-            <div className="workspace-context">
-              <span className="workspace-context-label">Team workspace</span>
-              <strong>Projects, tasks, activity</strong>
-            </div>
+            <WorkspaceContextMeta />
           </div>
-          <div className="workspace-topbar-right">
-            <Link href="/app/projects" className="workspace-toplink">
-              Open projects
-            </Link>
-            <Link href="/app/audit" className="workspace-toplink">
-              Activity
-            </Link>
-          </div>
+          <WorkspaceTopbarLinks />
         </header>
 
         <main className="shell">

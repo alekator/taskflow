@@ -1,7 +1,7 @@
 ﻿import { authFetch } from "../auth/auth-fetch";
 import { buildQueryString, type PaginatedResponse } from "../projects/shared";
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "TESTING" | "DONE";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
 export type Task = {
@@ -17,6 +17,18 @@ export type Task = {
   projectId: string;
   assigneeId: string | null;
   version: number;
+};
+
+export type WorkspaceTask = Task & {
+  project: {
+    id: string;
+    name: string;
+  };
+  assignee: {
+    id: string;
+    email: string;
+    name: string | null;
+  } | null;
 };
 
 export async function listProjectTasks(
@@ -36,6 +48,28 @@ export async function listProjectTasks(
   return authFetch<PaginatedResponse<Task>>(`/projects/${projectId}/tasks${query}`);
 }
 
+export async function listWorkspaceTasks(params?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  assigneeId?: string;
+  projectId?: string;
+  sortBy?:
+    | "order"
+    | "createdAt"
+    | "updatedAt"
+    | "dueDate"
+    | "title"
+    | "priority"
+    | "status";
+  sortOrder?: "asc" | "desc";
+}): Promise<PaginatedResponse<WorkspaceTask>> {
+  const query = buildQueryString(params);
+  return authFetch<PaginatedResponse<WorkspaceTask>>(`/tasks${query}`);
+}
+
 export async function createProjectTask(
   projectId: string,
   input: {
@@ -45,6 +79,7 @@ export async function createProjectTask(
     priority?: TaskPriority;
     order?: number;
     dueDate?: string;
+    assigneeId?: string;
   },
 ): Promise<Task> {
   return authFetch<Task>(`/projects/${projectId}/tasks`, {

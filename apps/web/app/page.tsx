@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const highlights = [
   "Projects, members, and tasks in one workspace",
-  "Live updates for project activity",
+  "Realtime updates while the team works",
   "Audit trail for critical actions",
   "Safe writes with conflict protection",
 ];
@@ -28,11 +28,10 @@ export default function Home() {
 
       <section className="hero">
         <p className="kicker">Simple task management for growing teams</p>
-        <h1>TaskFlow keeps projects clear, fast, and easy to run.</h1>
+        <h1>TaskFlow keeps work visible, organized, and moving.</h1>
         <p className="lead">
-          A lightweight project workspace for small companies that need boards,
-          members, activity history, and reliable task updates without the weight
-          of a large enterprise suite.
+          A lightweight workspace for small teams that need boards, members,
+          project activity, and reliable task updates without heavy setup.
         </p>
         <div className="hero-actions">
           <Link href="/app" className="button button-primary">

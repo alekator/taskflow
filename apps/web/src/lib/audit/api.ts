@@ -20,6 +20,7 @@ export type AuditLog = {
 export async function listAuditLogs(params?: {
   page?: number;
   limit?: number;
+  projectId?: string;
   action?: string;
   entityType?: string;
   entityId?: string;

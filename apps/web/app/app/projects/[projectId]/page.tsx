@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   addProjectMember,
   getProject,
@@ -13,11 +13,8 @@ import {
   type ProjectRole,
 } from "../../../../src/lib/projects/api";
 import {
-  assignProjectTask,
   createProjectTask,
-  deleteProjectTask,
   listProjectTasks,
-  unassignProjectTask,
   updateProjectTask,
   type Task,
   type TaskPriority,
@@ -30,11 +27,12 @@ import { useAuth } from "../../../../src/components/auth/auth-provider";
 import { getErrorDetails } from "../../../../src/lib/errors";
 
 const roles: ProjectRole[] = ["OWNER", "MANAGER", "MEMBER"];
-const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "TESTING", "DONE"];
 const taskPriorities: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const taskStatusLabels: Record<TaskStatus, string> = {
   TODO: "Todo",
   IN_PROGRESS: "In progress",
+  TESTING: "Testing",
   DONE: "Done",
 };
 const workspaceTabs = ["board", "members", "activity"] as const;
@@ -45,19 +43,126 @@ type RealtimeEvent = {
   timestamp: string;
 };
 
-function isWorkspaceTab(value: string | null): value is WorkspaceTab {
-  return value === "board" || value === "members" || value === "activity";
+type DragState = {
+  taskId: string;
+  fromStatus: TaskStatus;
+} | null;
+
+type DropIndicator = {
+  status: TaskStatus;
+  index: number;
+} | null;
+
+type MoveProjection = {
+  nextTasks: Task[];
+  updates: Array<{
+    taskId: string;
+    version: number;
+    status: TaskStatus;
+    order: number;
+  }>;
+};
+
+function getTaskStatusLabel(status: TaskStatus) {
+  return taskStatusLabels[status];
+}
+
+function getMemberLabel(member: ProjectMember | null | undefined) {
+  if (!member) return "Unassigned";
+  return member.user.name || member.user.email;
+}
+
+function getMemberInitial(member: ProjectMember | null | undefined) {
+  return getMemberLabel(member).slice(0, 1).toUpperCase();
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function getPriorityBadgeClass(priority: TaskPriority) {
+  switch (priority) {
+    case "URGENT":
+      return "badge-priority-urgent";
+    case "HIGH":
+      return "badge-priority-high";
+    case "MEDIUM":
+      return "badge-priority-medium";
+    default:
+      return "badge-priority-low";
+  }
+}
+
+function projectTaskMove(
+  tasks: Task[],
+  groupedTasks: Record<TaskStatus, Task[]>,
+  dragState: NonNullable<DragState>,
+  targetStatus: TaskStatus,
+  targetIndex: number,
+): MoveProjection | null {
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const sourceTask = taskMap.get(dragState.taskId);
+
+  if (!sourceTask) return null;
+
+  const sourceColumn = groupedTasks[sourceTask.status].slice();
+  const sourceWithoutTask = sourceColumn.filter((task) => task.id !== sourceTask.id);
+  const targetBase =
+    sourceTask.status === targetStatus ? sourceWithoutTask : groupedTasks[targetStatus].slice();
+  const insertIndex = Math.max(0, Math.min(targetIndex, targetBase.length));
+
+  const targetWithTask = [
+    ...targetBase.slice(0, insertIndex),
+    { ...sourceTask, status: targetStatus },
+    ...targetBase.slice(insertIndex),
+  ];
+
+  const normalizedTarget = targetWithTask.map((task, index) => ({
+    ...task,
+    status: targetStatus,
+    order: index + 1,
+  }));
+
+  const normalizedSource =
+    sourceTask.status === targetStatus
+      ? []
+      : sourceWithoutTask.map((task, index) => ({
+          ...task,
+          status: sourceTask.status,
+          order: index + 1,
+        }));
+
+  const updates = [...normalizedTarget, ...normalizedSource].filter((task) => {
+    const original = taskMap.get(task.id);
+    return original && (original.status !== task.status || original.order !== task.order);
+  });
+
+  if (updates.length === 0) return null;
+
+  const nextMap = new Map(tasks.map((task) => [task.id, task]));
+  for (const task of updates) {
+    nextMap.set(task.id, task);
+  }
+
+  return {
+    nextTasks: tasks.map((task) => nextMap.get(task.id) ?? task),
+    updates: updates.map((task) => ({
+      taskId: task.id,
+      version: taskMap.get(task.id)?.version ?? task.version,
+      status: task.status,
+      order: task.order,
+    })),
+  };
 }
 
 export default function ProjectDetailsPage() {
   const { notify } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
   const params = useParams<{ projectId: string }>();
   const searchParams = useSearchParams();
   const projectId = params.projectId;
-  const currentTab = isWorkspaceTab(searchParams.get("tab"))
-    ? searchParams.get("tab")
-    : "board";
+  const currentTabParam = searchParams.get("tab");
 
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -72,13 +177,16 @@ export default function ProjectDetailsPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("MEDIUM");
+  const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
   const [taskCreatePending, setTaskCreatePending] = useState(false);
   const [taskActionId, setTaskActionId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState("");
   const [taskStatusFilter, setTaskStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
   const [taskPriorityFilter, setTaskPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>("ALL");
+  const [dragState, setDragState] = useState<DragState>(null);
+  const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
 
   const [events, setEvents] = useState<RealtimeEvent[]>([]);
   const [projectAudit, setProjectAudit] = useState<AuditLog[]>([]);
@@ -111,6 +219,7 @@ export default function ProjectDetailsPage() {
     const groups: Record<TaskStatus, Task[]> = {
       TODO: [],
       IN_PROGRESS: [],
+      TESTING: [],
       DONE: [],
     };
 
@@ -134,6 +243,31 @@ export default function ProjectDetailsPage() {
     [members.length, tasks],
   );
 
+  const taskStatusCounts = useMemo(
+    () => ({
+      TODO: tasks.filter((task) => task.status === "TODO").length,
+      IN_PROGRESS: tasks.filter((task) => task.status === "IN_PROGRESS").length,
+      TESTING: tasks.filter((task) => task.status === "TESTING").length,
+      DONE: tasks.filter((task) => task.status === "DONE").length,
+    }),
+    [tasks],
+  );
+
+  const taskPriorityCounts = useMemo(
+    () => ({
+      LOW: tasks.filter((task) => task.priority === "LOW").length,
+      MEDIUM: tasks.filter((task) => task.priority === "MEDIUM").length,
+      HIGH: tasks.filter((task) => task.priority === "HIGH").length,
+      URGENT: tasks.filter((task) => task.priority === "URGENT").length,
+    }),
+    [tasks],
+  );
+
+  const memberPreview = useMemo(
+    () => members.slice(0, 3).map((member) => getMemberLabel(member)),
+    [members],
+  );
+
   const memberRoleStats = useMemo(
     () => ({
       owners: members.filter((member) => member.role === "OWNER").length,
@@ -143,10 +277,21 @@ export default function ProjectDetailsPage() {
     [members],
   );
 
-  const selectedTask = useMemo(
-    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
-    [selectedTaskId, tasks],
-  );
+  const currentProjectRole = useMemo<ProjectRole | null>(() => {
+    if (!user || !project) return null;
+    if (project.ownerId === user.id) return "OWNER";
+    return members.find((member) => member.userId === user.id)?.role ?? null;
+  }, [members, project, user]);
+
+  const canViewActivity =
+    user?.role === "ADMIN" || currentProjectRole === "MANAGER";
+  const availableTabs: WorkspaceTab[] = canViewActivity ? [...workspaceTabs] : ["board", "members"];
+  const currentTab: WorkspaceTab =
+    currentTabParam === "members"
+      ? "members"
+      : currentTabParam === "activity" && canViewActivity
+        ? "activity"
+        : "board";
 
   const load = useCallback(async () => {
     if (!projectId) {
@@ -188,7 +333,7 @@ export default function ProjectDetailsPage() {
 
   const loadActivity = useCallback(async () => {
     if (!projectId) return;
-    if (user?.role !== "ADMIN") {
+    if (!canViewActivity) {
       setProjectAudit([]);
       setActivityError(null);
       return;
@@ -198,15 +343,15 @@ export default function ProjectDetailsPage() {
     setActivityError(null);
 
     try {
-      const auditRes = await listAuditLogs({ page: 1, limit: 50 });
-      setProjectAudit(auditRes.items.filter((item) => item.projectId === projectId).slice(0, 12));
+      const auditRes = await listAuditLogs({ page: 1, limit: 50, projectId });
+      setProjectAudit(auditRes.items.slice(0, 12));
     } catch (err) {
       const details = getErrorDetails(err);
       setActivityError(details.message);
     } finally {
       setActivityLoading(false);
     }
-  }, [projectId, user?.role]);
+  }, [canViewActivity, projectId]);
 
   useEffect(() => {
     void load();
@@ -219,18 +364,10 @@ export default function ProjectDetailsPage() {
   }, [currentTab, loadActivity]);
 
   useEffect(() => {
-    if (!selectedTaskId) return;
-    if (!tasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(null);
+    if (currentTabParam === "activity" && !canViewActivity && projectId) {
+      router.replace(`/app/projects/${projectId}?tab=board`);
     }
-  }, [selectedTaskId, tasks]);
-
-  useEffect(() => {
-    if (!selectedTaskId) return;
-    if (!filteredTasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(null);
-    }
-  }, [filteredTasks, selectedTaskId]);
+  }, [canViewActivity, currentTabParam, projectId, router]);
 
   useProjectRealtime(
     projectId,
@@ -243,6 +380,21 @@ export default function ProjectDetailsPage() {
       void load();
     },
   );
+
+  const clearDragState = () => {
+    setDragState(null);
+    setDropIndicator(null);
+  };
+
+  const openCreateTaskModal = () => {
+    const defaultAssigneeId =
+      currentProjectRole === "MEMBER" && user ? user.id : "";
+    setNewTaskTitle("");
+    setNewTaskDescription("");
+    setNewTaskPriority("MEDIUM");
+    setNewTaskAssigneeId(defaultAssigneeId);
+    setIsCreateTaskOpen(true);
+  };
 
   const onAddMember = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -303,11 +455,17 @@ export default function ProjectDetailsPage() {
         description: newTaskDescription.trim() || undefined,
         priority: newTaskPriority,
         order,
+        assigneeId:
+          currentProjectRole === "MEMBER"
+            ? undefined
+            : newTaskAssigneeId || undefined,
       });
 
       setNewTaskTitle("");
       setNewTaskDescription("");
       setNewTaskPriority("MEDIUM");
+      setNewTaskAssigneeId("");
+      setIsCreateTaskOpen(false);
       await load();
       notify("success", "Task created");
     } catch (err) {
@@ -319,129 +477,57 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  const onChangeTaskStatus = async (task: Task, status: TaskStatus) => {
-    if (!projectId) return;
+  const onDragStartTask = (event: React.DragEvent<HTMLElement>, task: Task) => {
+    setDragState({ taskId: task.id, fromStatus: task.status });
+    setDropIndicator({
+      status: task.status,
+      index: groupedTasks[task.status].findIndex((item) => item.id === task.id),
+    });
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", task.id);
+  };
 
-    setTaskActionId(task.id);
-    setError(null);
+  const onDragOverZone = (
+    event: React.DragEvent<HTMLElement>,
+    status: TaskStatus,
+    index: number,
+  ) => {
+    if (!dragState) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
 
-    try {
-      await updateProjectTask(projectId, task.id, task.version, { status });
-      await load();
-    } catch (err) {
-      const details = getErrorDetails(err);
-      setError(details.message);
-      notify("error", details.message);
-    } finally {
-      setTaskActionId(null);
+    if (!dropIndicator || dropIndicator.status !== status || dropIndicator.index !== index) {
+      setDropIndicator({ status, index });
     }
   };
 
-  const onChangeTaskPriority = async (task: Task, priority: TaskPriority) => {
-    if (!projectId) return;
+  const onDropTask = async (status: TaskStatus, index: number) => {
+    if (!projectId || !dragState) return;
 
-    setTaskActionId(task.id);
+    const activeDrag = dragState;
+    const projection = projectTaskMove(tasks, groupedTasks, activeDrag, status, index);
+    clearDragState();
+
+    if (!projection) return;
+
+    const previousTasks = tasks;
+    setTasks(projection.nextTasks);
+    setTaskActionId(activeDrag.taskId);
     setError(null);
 
     try {
-      await updateProjectTask(projectId, task.id, task.version, { priority });
+      await Promise.all(
+        projection.updates.map((update) =>
+          updateProjectTask(projectId, update.taskId, update.version, {
+            status: update.status,
+            order: update.order,
+          }),
+        ),
+      );
       await load();
+      notify("success", `Task moved to ${getTaskStatusLabel(status)}`);
     } catch (err) {
-      const details = getErrorDetails(err);
-      setError(details.message);
-      notify("error", details.message);
-    } finally {
-      setTaskActionId(null);
-    }
-  };
-
-  const onAssignTask = async (task: Task, assigneeId: string) => {
-    if (!projectId) return;
-
-    setTaskActionId(task.id);
-    setError(null);
-
-    try {
-      if (assigneeId) {
-        await assignProjectTask(projectId, task.id, assigneeId);
-      } else {
-        await unassignProjectTask(projectId, task.id);
-      }
-      await load();
-      notify("success", assigneeId ? "Task assigned" : "Task unassigned");
-    } catch (err) {
-      const details = getErrorDetails(err);
-      setError(details.message);
-      notify("error", details.message);
-    } finally {
-      setTaskActionId(null);
-    }
-  };
-
-  const onDeleteTask = async (task: Task) => {
-    if (!projectId) return;
-
-    setTaskActionId(task.id);
-    setError(null);
-
-    try {
-      await deleteProjectTask(projectId, task.id, task.version);
-      await load();
-      notify("success", "Task deleted");
-    } catch (err) {
-      const details = getErrorDetails(err);
-      setError(details.message);
-      notify("error", details.message);
-    } finally {
-      setTaskActionId(null);
-    }
-  };
-
-  const onMoveTaskToStatus = async (task: Task, targetStatus: TaskStatus) => {
-    if (!projectId || task.status === targetStatus) return;
-
-    setTaskActionId(task.id);
-    setError(null);
-
-    try {
-      const targetColumn = groupedTasks[targetStatus];
-      const nextOrder = targetColumn.length > 0 ? Math.max(...targetColumn.map((item) => item.order)) + 1 : 1;
-
-      await updateProjectTask(projectId, task.id, task.version, {
-        status: targetStatus,
-        order: nextOrder,
-      });
-      await load();
-    } catch (err) {
-      const details = getErrorDetails(err);
-      setError(details.message);
-      notify("error", details.message);
-    } finally {
-      setTaskActionId(null);
-    }
-  };
-
-  const onMoveTaskWithinStatus = async (task: Task, direction: "up" | "down") => {
-    if (!projectId) return;
-
-    const currentColumn = groupedTasks[task.status];
-    const index = currentColumn.findIndex((item) => item.id === task.id);
-    if (index < 0) return;
-
-    const neighborIndex = direction === "up" ? index - 1 : index + 1;
-    const neighbor = currentColumn[neighborIndex];
-    if (!neighbor) return;
-
-    setTaskActionId(task.id);
-    setError(null);
-
-    try {
-      await Promise.all([
-        updateProjectTask(projectId, task.id, task.version, { order: neighbor.order }),
-        updateProjectTask(projectId, neighbor.id, neighbor.version, { order: task.order }),
-      ]);
-      await load();
-    } catch (err) {
+      setTasks(previousTasks);
       const details = getErrorDetails(err);
       setError(details.message);
       notify("error", details.message);
@@ -461,7 +547,7 @@ export default function ProjectDetailsPage() {
   }
 
   return (
-    <div className="stack">
+    <div className="stack workspace-stack-tight">
       <header className="project-header">
         <div className="project-header-main">
           <div className="project-breadcrumbs">
@@ -470,27 +556,56 @@ export default function ProjectDetailsPage() {
             <span>{project?.name ?? "Project"}</span>
           </div>
           <h1>{project?.name ?? "Project"}</h1>
-          <p>{project?.description || "No description"}</p>
+          <p className="project-description-preview">{project?.description || "No description"}</p>
         </div>
 
         <div className="project-meta-grid">
-          <div className="stat-card">
-            <strong>{projectStats.taskCount}</strong>
-            <p className="soft">Tasks</p>
+          <div className="stat-card stat-card-compact">
+            <div className="stat-card-head">
+              <strong>{projectStats.taskCount}</strong>
+              <p className="soft">Tasks</p>
+            </div>
+            <div className="stat-card-details">
+              <span className={`badge ${getPriorityBadgeClass("LOW")}`}>LOW {taskPriorityCounts.LOW}</span>
+              <span className={`badge ${getPriorityBadgeClass("MEDIUM")}`}>MEDIUM {taskPriorityCounts.MEDIUM}</span>
+              <span className={`badge ${getPriorityBadgeClass("HIGH")}`}>HIGH {taskPriorityCounts.HIGH}</span>
+              <span className={`badge ${getPriorityBadgeClass("URGENT")}`}>URGENT {taskPriorityCounts.URGENT}</span>
+            </div>
           </div>
-          <div className="stat-card">
-            <strong>{projectStats.openCount}</strong>
-            <p className="soft">Open work</p>
+          <div className="stat-card stat-card-compact">
+            <div className="stat-card-head">
+              <strong>{projectStats.openCount}</strong>
+              <p className="soft">Open work</p>
+            </div>
+            <div className="stat-card-details stat-card-details-strong">
+              <span>{taskStatusCounts.TODO} waiting</span>
+              <span>{taskStatusCounts.IN_PROGRESS} in progress</span>
+              <span>{taskStatusCounts.TESTING} in review</span>
+            </div>
           </div>
-          <div className="stat-card">
-            <strong>{projectStats.memberCount}</strong>
-            <p className="soft">Members</p>
+          <div className="stat-card stat-card-compact">
+            <div className="stat-card-head">
+              <strong>{projectStats.memberCount}</strong>
+              <p className="soft">Members</p>
+            </div>
+            <div className="stat-card-details">
+              {memberPreview.length > 0 ? memberPreview.map((item) => <span key={item}>{item}</span>) : <span>No members yet</span>}
+              {members.length > memberPreview.length ? <span>+{members.length - memberPreview.length} more</span> : null}
+            </div>
           </div>
+          <button
+            className="button button-primary project-create-trigger"
+            type="button"
+            data-testid="task-create-open"
+            onClick={openCreateTaskModal}
+          >
+            Create task
+          </button>
         </div>
       </header>
 
       <nav className="project-tabs" aria-label="Project sections">
-        {workspaceTabs.map((tab) => {
+        {availableTabs.map((tab) => {
           const active = currentTab === tab;
           const href = `/app/projects/${projectId}?tab=${tab}`;
           const label = tab === "board" ? "Board" : tab === "members" ? "Members" : "Activity";
@@ -506,294 +621,311 @@ export default function ProjectDetailsPage() {
       {error ? <p className="error-text">{error}</p> : null}
 
       {currentTab === "board" ? (
-        <div className="stack">
-          <section className="board-toolbar">
+        <div className="stack workspace-stack-tight">
+          <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Board</h2>
-              <p className="soft">Move tasks across workflow stages and keep assignment visible.</p>
+              <p className="soft">Keep the active workflow in one place and move work between Todo, In progress, Testing, and Done.</p>
             </div>
-            <p className="meta">
-              Project ID: {projectId || "n/a"} - {filteredTasks.length} shown
-            </p>
+            <div className="board-toolbar-meta">
+              <span className="badge badge-neutral">{filteredTasks.length} visible</span>
+              <span className="meta">Project ID {projectId || "n/a"}</span>
+            </div>
           </section>
 
-          <section className="projects-layout board-layout">
-            <aside className="item-card project-create-panel">
-              <div className="stack stack-sm">
-                <div>
-                  <h2>Create task</h2>
-                  <p className="soft">Add the next piece of work directly into the board.</p>
-                </div>
+          <section className="item-card board-filters-card board-filters-toolbar board-filters-toolbar-thin">
+            <div className="board-filters-inline">
+              <strong>Filters</strong>
+              <label className="board-filter-search board-filter-inline-label">
+                <span>Search</span>
+                <input
+                  value={taskSearch}
+                  onChange={(e) => setTaskSearch(e.target.value)}
+                  placeholder="Search by task title or description"
+                />
+              </label>
 
-                <form className="auth-form auth-form-compact" onSubmit={onCreateTask}>
-                  <label>
-                    Task title
-                    <input data-testid="task-title-input" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} minLength={1} required />
-                  </label>
+              <label className="board-filter-inline-label">
+                <span>Status</span>
+                <select value={taskStatusFilter} onChange={(e) => setTaskStatusFilter(e.target.value as "ALL" | TaskStatus)}>
+                  <option value="ALL">All statuses</option>
+                  {taskStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {getTaskStatusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label>
-                    Description
-                    <input data-testid="task-description-input" value={newTaskDescription} onChange={(e) => setNewTaskDescription(e.target.value)} />
-                  </label>
+              <label className="board-filter-inline-label">
+                <span>Priority</span>
+                <select value={taskPriorityFilter} onChange={(e) => setTaskPriorityFilter(e.target.value as "ALL" | TaskPriority)}>
+                  <option value="ALL">All priorities</option>
+                  {taskPriorities.map((priority) => (
+                    <option key={priority} value={priority}>
+                      {priority}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <label>
-                    Priority
-                    <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value as TaskPriority)} style={{ minHeight: 42 }}>
-                      {taskPriorities.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priority}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <label className="board-filter-inline-label">
+                <span>Assignee</span>
+                <select value={taskAssigneeFilter} onChange={(e) => setTaskAssigneeFilter(e.target.value)}>
+                  <option value="ALL">All assignees</option>
+                  {members.map((member) => (
+                    <option key={member.userId} value={member.userId}>
+                      {getMemberLabel(member)}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-                  <button className="button button-primary" type="submit" disabled={taskCreatePending}>
-                    {taskCreatePending ? "Creating..." : "Create task"}
-                  </button>
-                </form>
-              </div>
-            </aside>
+              <button
+                className="button button-ghost button-compact"
+                type="button"
+                onClick={() => {
+                  setTaskSearch("");
+                  setTaskStatusFilter("ALL");
+                  setTaskPriorityFilter("ALL");
+                  setTaskAssigneeFilter("ALL");
+                }}
+              >
+                Reset
+              </button>
+            </div>
+          </section>
 
-            <section className="stack">
-              <div className="item-card board-filters">
-                <div className="panel-header panel-header-inline">
-                  <h2>Filters</h2>
-                  <button
-                    className="button button-ghost button-compact"
-                    type="button"
-                    onClick={() => {
-                      setTaskSearch("");
-                      setTaskStatusFilter("ALL");
-                      setTaskPriorityFilter("ALL");
-                      setTaskAssigneeFilter("ALL");
-                    }}
-                  >
-                    Reset
-                  </button>
-                </div>
+          {tasks.length === 0 ? <div className="empty-state">No tasks yet. Create the first task to start the board.</div> : null}
+          {tasks.length > 0 && filteredTasks.length === 0 ? <div className="empty-state">No tasks match current filters.</div> : null}
 
-                <div className="columns-auto">
-                  <label>
-                    Search
-                    <input
-                      value={taskSearch}
-                      onChange={(e) => setTaskSearch(e.target.value)}
-                      placeholder="Find by title or description"
-                    />
-                  </label>
-
-                  <label>
-                    Status
-                    <select
-                      value={taskStatusFilter}
-                      onChange={(e) =>
-                        setTaskStatusFilter(e.target.value as "ALL" | TaskStatus)
-                      }
-                    >
-                      <option value="ALL">All statuses</option>
-                      {taskStatuses.map((status) => (
-                        <option key={status} value={status}>
-                          {taskStatusLabels[status]}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Priority
-                    <select
-                      value={taskPriorityFilter}
-                      onChange={(e) =>
-                        setTaskPriorityFilter(e.target.value as "ALL" | TaskPriority)
-                      }
-                    >
-                      <option value="ALL">All priorities</option>
-                      {taskPriorities.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priority}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Assignee
-                    <select
-                      value={taskAssigneeFilter}
-                      onChange={(e) => setTaskAssigneeFilter(e.target.value)}
-                    >
-                      <option value="ALL">All assignees</option>
-                      {members.map((member) => (
-                        <option key={member.userId} value={member.userId}>
-                          {member.user.name || member.user.email}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              {tasks.length === 0 ? <div className="empty-state">No tasks yet. Create the first task to start the board.</div> : null}
-              {tasks.length > 0 && filteredTasks.length === 0 ? (
-                <div className="empty-state">
-                  No tasks match current filters.
-                </div>
-              ) : null}
-
-              {filteredTasks.length > 0 ? (
-                <section className="board-main-grid">
-                  <section className="kanban">
+          {filteredTasks.length > 0 ? (
+            <section className="kanban-shell kanban-shell-expanded">
+                {filteredTasks.length > 0 ? (
+                  <section className="kanban kanban-four kanban-board-dense" data-testid="kanban-board">
                     {taskStatuses.map((status) => (
-                      <article key={status} className="kanban-column">
-                        <h3>
-                          {taskStatusLabels[status]} ({groupedTasks[status].length})
-                        </h3>
+                      <article
+                        key={status}
+                        className={`kanban-column kanban-column-dense${dragState ? " kanban-column-droppable" : ""}`}
+                        data-testid={`kanban-column-${status.toLowerCase()}`}
+                        onDragOver={(event) => onDragOverZone(event, status, groupedTasks[status].length)}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void onDropTask(status, groupedTasks[status].length);
+                        }}
+                      >
+                        <div className="kanban-column-header">
+                          <div>
+                            <h3>{getTaskStatusLabel(status)}</h3>
+                            <p className="meta">{groupedTasks[status].length} tasks</p>
+                          </div>
+                          <span className="badge badge-neutral">{status.replace("_", " ")}</span>
+                        </div>
 
                         {groupedTasks[status].length === 0 ? (
-                          <p className="meta">No tasks</p>
+                          <div
+                            className={`kanban-empty-drop${dropIndicator?.status === status && dropIndicator?.index === 0 ? " kanban-empty-drop-active" : ""}`}
+                            onDragOver={(event) => onDragOverZone(event, status, 0)}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void onDropTask(status, 0);
+                            }}
+                          >
+                            <p className="meta">Drop a task here</p>
+                          </div>
                         ) : (
                           <ul className="kanban-list">
                             {groupedTasks[status].map((task, index) => {
-                              const busy = taskActionId === task.id;
                               const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
-                              const active = selectedTaskId === task.id;
+                              const busy = taskActionId === task.id;
 
                               return (
-                                <li key={task.id} className={active ? "kanban-item kanban-item-active" : "kanban-item"}>
-                                  <button
-                                    className="kanban-item-trigger"
-                                    type="button"
-                                    onClick={() => setSelectedTaskId(task.id)}
+                                <li key={task.id} className="kanban-lane-item">
+                                  <div
+                                    className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === index ? " kanban-dropzone-active" : ""}`}
+                                    onDragOver={(event) => onDragOverZone(event, status, index)}
+                                    onDrop={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      void onDropTask(status, index);
+                                    }}
+                                  />
+
+                                  <article
+                                    className="kanban-item kanban-item-dense"
+                                    draggable={!busy}
+                                    onDragStart={(event) => onDragStartTask(event, task)}
+                                    onDragEnd={clearDragState}
                                     data-testid={`task-card-${task.id}`}
                                   >
-                                    <strong>{task.title}</strong>
-                                    <span className="meta">#{task.order} - {task.priority} - v{task.version}</span>
-                                    <span className="soft">
-                                      {assignee ? `Assignee: ${assignee.user.name || assignee.user.email}` : "Unassigned"}
-                                    </span>
-                                  </button>
-                                  <div className="kanban-actions">
-                                    <button className="button-micro" type="button" disabled={busy || index === 0} onClick={() => void onMoveTaskWithinStatus(task, "up")}>Up</button>
-                                    <button className="button-micro" type="button" disabled={busy || index === groupedTasks[status].length - 1} onClick={() => void onMoveTaskWithinStatus(task, "down")}>Down</button>
-                                    <button className="button-micro" type="button" disabled={busy || status === "TODO"} onClick={() => void onMoveTaskToStatus(task, status === "DONE" ? "IN_PROGRESS" : "TODO")}>Left</button>
-                                    <button className="button-micro" type="button" disabled={busy || status === "DONE"} onClick={() => void onMoveTaskToStatus(task, status === "TODO" ? "IN_PROGRESS" : "DONE")}>Right</button>
-                                  </div>
+                                    <div className="kanban-item-trigger">
+                                      <div className="kanban-item-topline">
+                                        <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>{task.priority}</span>
+                                        <span className="badge badge-neutral">v{task.version}</span>
+                                      </div>
+                                      <strong>{task.title}</strong>
+                                      <p className="kanban-item-description">{task.description || "Short description not added."}</p>
+                                      <div className="kanban-item-footer">
+                                        <span className="member-pill">
+                                          <span className="member-pill-avatar">{getMemberInitial(assignee)}</span>
+                                          <span>{getMemberLabel(assignee)}</span>
+                                        </span>
+                                      </div>
+                                      <div className="kanban-item-meta-row">
+                                        <span className="meta">#{task.order}</span>
+                                        <span className="meta">Updated {formatDateTime(task.updatedAt)}</span>
+                                      </div>
+                                      <div className="kanban-item-hint">Drag between columns</div>
+                                    </div>
+                                  </article>
                                 </li>
                               );
                             })}
+                            <li>
+                              <div
+                                className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === groupedTasks[status].length ? " kanban-dropzone-active" : ""}`}
+                                onDragOver={(event) => onDragOverZone(event, status, groupedTasks[status].length)}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  void onDropTask(status, groupedTasks[status].length);
+                                }}
+                              />
+                            </li>
                           </ul>
                         )}
                       </article>
                     ))}
                   </section>
-
-                  <aside className="task-drawer">
-                    {selectedTask ? (
-                      <div className="task-drawer-card" data-testid="task-item">
-                        <div className="panel-header panel-header-inline">
-                          <div>
-                            <h2>{selectedTask.title}</h2>
-                            <p className="meta">version {selectedTask.version} - order {selectedTask.order}</p>
-                          </div>
-                          <button
-                            className="button button-ghost button-compact"
-                            type="button"
-                            onClick={() => setSelectedTaskId(null)}
-                          >
-                            Close
-                          </button>
-                        </div>
-
-                        <div className="stack">
-                          <p className="soft">{selectedTask.description || "No description"}</p>
-
-                          <div className="columns-auto">
-                            <label>
-                              Status
-                              <select
-                                value={selectedTask.status}
-                                onChange={(e) =>
-                                  void onChangeTaskStatus(selectedTask, e.target.value as TaskStatus)
-                                }
-                                disabled={taskActionId === selectedTask.id}
-                                style={{ minHeight: 40 }}
-                              >
-                                {taskStatuses.map((status) => (
-                                  <option key={status} value={status}>{status}</option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label>
-                              Priority
-                              <select
-                                value={selectedTask.priority}
-                                onChange={(e) =>
-                                  void onChangeTaskPriority(selectedTask, e.target.value as TaskPriority)
-                                }
-                                disabled={taskActionId === selectedTask.id}
-                                style={{ minHeight: 40 }}
-                              >
-                                {taskPriorities.map((priority) => (
-                                  <option key={priority} value={priority}>{priority}</option>
-                                ))}
-                              </select>
-                            </label>
-
-                            <label>
-                              Assignee
-                              <select
-                                value={selectedTask.assigneeId || ""}
-                                onChange={(e) => void onAssignTask(selectedTask, e.target.value)}
-                                disabled={taskActionId === selectedTask.id}
-                                style={{ minHeight: 40 }}
-                              >
-                                <option value="">Unassigned</option>
-                                {members.map((member) => (
-                                  <option key={member.userId} value={member.userId}>
-                                    {member.user.name || member.user.email} ({member.role})
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          </div>
-
-                          <div className="task-drawer-meta">
-                            <span className="meta">Created {new Date(selectedTask.createdAt).toLocaleString()}</span>
-                            <span className="meta">Updated {new Date(selectedTask.updatedAt).toLocaleString()}</span>
-                            <span className="meta">Project {selectedTask.projectId}</span>
-                          </div>
-
-                          <button
-                            data-testid={`task-delete-${selectedTask.id}`}
-                            className="button button-ghost"
-                            type="button"
-                            disabled={taskActionId === selectedTask.id}
-                            onClick={() => void onDeleteTask(selectedTask)}
-                          >
-                            {taskActionId === selectedTask.id ? "Working..." : "Delete task"}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="task-drawer-empty">
-                        <h2>Task details</h2>
-                        <p className="soft">
-                          Select a card on the board to inspect and update status, priority, assignee, and metadata.
-                        </p>
-                      </div>
-                    )}
-                  </aside>
-                </section>
-              ) : null}
+                ) : null}
             </section>
-          </section>
+          ) : null}
+
+          {isCreateTaskOpen ? (
+            <div
+              className="modal-backdrop"
+              role="presentation"
+              onClick={() => {
+                if (!taskCreatePending) {
+                  setIsCreateTaskOpen(false);
+                }
+              }}
+            >
+              <div
+                className="modal-card task-create-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="task-create-modal-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="panel-header panel-header-inline">
+                  <div>
+                    <h2 id="task-create-modal-title">Create task</h2>
+                    <p className="soft">
+                      Add the next task with description, priority, and assignee in one place.
+                    </p>
+                  </div>
+                  <button
+                    className="button button-ghost button-compact"
+                    type="button"
+                    onClick={() => setIsCreateTaskOpen(false)}
+                    disabled={taskCreatePending}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <form className="auth-form auth-form-compact task-create-modal-form" onSubmit={onCreateTask}>
+                  <div className="task-create-modal-grid">
+                    <label>
+                      Task title
+                      <input
+                        data-testid="task-title-input"
+                        value={newTaskTitle}
+                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                        minLength={1}
+                        maxLength={80}
+                        required
+                      />
+                    </label>
+
+                    <label>
+                      Priority
+                      <select
+                        value={newTaskPriority}
+                        onChange={(e) => setNewTaskPriority(e.target.value as TaskPriority)}
+                        style={{ minHeight: 42 }}
+                      >
+                        {taskPriorities.map((priority) => (
+                          <option key={priority} value={priority}>
+                            {priority}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Assignee
+                      <select
+                        value={currentProjectRole === "MEMBER" && user ? user.id : newTaskAssigneeId}
+                        onChange={(e) => setNewTaskAssigneeId(e.target.value)}
+                        disabled={currentProjectRole === "MEMBER"}
+                        style={{ minHeight: 42 }}
+                      >
+                        {currentProjectRole !== "MEMBER" ? (
+                          <option value="">Unassigned</option>
+                        ) : null}
+                        {members.map((member) => (
+                          <option key={member.userId} value={member.userId}>
+                            {getMemberLabel(member)} ({member.role})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <label>
+                    Description <span className="meta">(optional)</span>
+                      <textarea
+                        data-testid="task-description-input"
+                        value={newTaskDescription}
+                        onChange={(e) => setNewTaskDescription(e.target.value)}
+                        placeholder="Describe the task, expected result, and important context"
+                        maxLength={300}
+                        rows={8}
+                      />
+                  </label>
+
+                  <div className="task-create-modal-actions">
+                    <button
+                      className="button button-ghost"
+                      type="button"
+                      onClick={() => setIsCreateTaskOpen(false)}
+                      disabled={taskCreatePending}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="button button-primary"
+                      type="submit"
+                      data-testid="task-create-submit"
+                      disabled={taskCreatePending}
+                    >
+                      {taskCreatePending ? "Creating..." : "Create task"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {currentTab === "members" ? (
-        <div className="stack">
-          <section className="board-toolbar">
+        <div className="stack workspace-stack-tight">
+          <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Members</h2>
               <p className="soft">Manage who can access this project and what role they have.</p>
@@ -801,22 +933,22 @@ export default function ProjectDetailsPage() {
           </section>
 
           <section className="columns-3">
-            <article className="stat-card">
+            <article className="stat-card stat-card-compact">
               <strong>{memberRoleStats.owners}</strong>
               <p className="soft">Owners</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card stat-card-compact">
               <strong>{memberRoleStats.managers}</strong>
               <p className="soft">Managers</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card stat-card-compact">
               <strong>{memberRoleStats.members}</strong>
               <p className="soft">Members</p>
             </article>
           </section>
 
-          <section className="projects-layout">
-            <aside className="item-card project-create-panel">
+          <section className="projects-layout members-layout">
+            <aside className="item-card project-create-panel members-create-panel">
               <div className="stack stack-sm">
                 <div>
                   <h2>Add member</h2>
@@ -861,11 +993,9 @@ export default function ProjectDetailsPage() {
                     <li key={member.userId} className="projects-row">
                       <div className="projects-row-main">
                         <div className="member-cell">
-                          <div className="member-avatar">
-                            {(member.user.name || member.user.email).slice(0, 1).toUpperCase()}
-                          </div>
+                          <div className="member-avatar">{getMemberInitial(member)}</div>
                           <div className="member-identity">
-                            <strong>{member.user.name || member.user.email}</strong>
+                            <strong>{getMemberLabel(member)}</strong>
                             <span className="meta">{member.userId}</span>
                           </div>
                         </div>
@@ -891,39 +1021,42 @@ export default function ProjectDetailsPage() {
       ) : null}
 
       {currentTab === "activity" ? (
-        <div className="stack">
-          <section className="board-toolbar">
+        <div className="stack workspace-stack-tight">
+          <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Activity</h2>
-              <p className="soft">Follow recent realtime events and audit-backed history for this project.</p>
+              <p className="soft">Follow the live project feed alongside audit-backed history for this project.</p>
             </div>
           </section>
 
           <section className="columns-3">
-            <article className="stat-card">
+            <article className="stat-card stat-card-compact">
               <strong>{events.length}</strong>
-              <p className="soft">Live events</p>
+              <p className="soft">Realtime feed</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card stat-card-compact">
               <strong>{projectAudit.length}</strong>
               <p className="soft">Audit entries</p>
             </article>
-            <article className="stat-card">
-              <strong>{user?.role === "ADMIN" ? "Full" : "Limited"}</strong>
+            <article className="stat-card stat-card-compact">
+              <strong>{canViewActivity ? "Project scope" : "Limited"}</strong>
               <p className="soft">Visibility level</p>
             </article>
           </section>
 
-          <section className="overview-grid">
-            <article className="item-card">
+          <section className="overview-grid activity-grid-tight">
+            <article className="item-card activity-card-tall">
               <div className="panel-header panel-header-inline">
-                <h2>Live events</h2>
+                <div>
+                  <h2>Realtime feed</h2>
+                  <p className="meta">WebSocket updates appear here while teammates work in the project.</p>
+                </div>
                 <span className="meta">{events.length} recent events</span>
               </div>
               {events.length === 0 ? (
-                <div className="empty-state">No live events yet.</div>
+                <div className="empty-state empty-state-fill">No realtime updates yet. This panel fills as project events arrive live.</div>
               ) : (
-                <ul className="activity-feed">
+                <ul className="activity-feed activity-feed-timeline">
                   {events.map((event, index) => (
                     <li key={`${event.type}-${event.timestamp}-${index}`} className="activity-item">
                       <div className="activity-dot" />
@@ -937,17 +1070,17 @@ export default function ProjectDetailsPage() {
               )}
             </article>
 
-            <article className="item-card">
+            <article className="item-card activity-card-tall">
               <div className="panel-header panel-header-inline">
                 <h2>Audit history</h2>
-                <span className="meta">{user?.role === "ADMIN" ? "Admin access" : "Admin only"}</span>
+                <span className="meta">{canViewActivity ? "Scoped access" : "Admin only"}</span>
               </div>
 
-              {user?.role !== "ADMIN" ? (
-                <div className="empty-state">Audit history is available to administrators. Live events remain visible for all members.</div>
+              {!canViewActivity ? (
+                <div className="empty-state empty-state-fill">Audit history is limited to administrators. The realtime feed remains visible to all project members.</div>
               ) : null}
 
-              {user?.role === "ADMIN" && activityLoading ? (
+              {canViewActivity && activityLoading ? (
                 <div className="stack">
                   <div className="skeleton skeleton-lg" />
                   <div className="skeleton" />
@@ -955,14 +1088,14 @@ export default function ProjectDetailsPage() {
                 </div>
               ) : null}
 
-              {user?.role === "ADMIN" && activityError ? <p className="error-text">{activityError}</p> : null}
+              {canViewActivity && activityError ? <p className="error-text">{activityError}</p> : null}
 
-              {user?.role === "ADMIN" && !activityLoading && projectAudit.length === 0 ? (
-                <div className="empty-state">No audit records found for this project yet.</div>
+              {canViewActivity && !activityLoading && projectAudit.length === 0 ? (
+                <div className="empty-state empty-state-fill">No audit records found for this project yet.</div>
               ) : null}
 
-              {user?.role === "ADMIN" && projectAudit.length > 0 ? (
-                <ul className="activity-feed">
+              {canViewActivity && projectAudit.length > 0 ? (
+                <ul className="activity-feed activity-feed-timeline">
                   {projectAudit.map((log) => (
                     <li key={log.id} className="activity-item">
                       <div className="activity-dot activity-dot-muted" />

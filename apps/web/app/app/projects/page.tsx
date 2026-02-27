@@ -96,7 +96,7 @@ export default function ProjectsPage() {
     <div className="stack">
       <header className="panel-header">
         <h1>Projects</h1>
-        <p>Open an existing workspace or create a new project for your team.</p>
+        <p>Open an existing project or create a new workspace for your team.</p>
       </header>
 
       <section className="projects-layout">
@@ -117,17 +117,20 @@ export default function ProjectsPage() {
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   minLength={1}
+                  maxLength={100}
                   placeholder="Website relaunch"
                   required
                 />
               </label>
               <label>
-                Description
-                <input
+                Description <span className="meta">(optional)</span>
+                <textarea
                   data-testid="project-description-input"
                   value={createDescription}
                   onChange={(e) => setCreateDescription(e.target.value)}
                   placeholder="Scope, team, or current objective"
+                  maxLength={1000}
+                  rows={4}
                 />
               </label>
               <button

@@ -1,10 +1,16 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../../src/components/auth/auth-provider";
 import { listAuditLogs, type AuditLog } from "../../../src/lib/audit/api";
 import { getErrorDetails } from "../../../src/lib/errors";
 
 export default function AuditPage() {
+  const { user, isReady } = useAuth();
+  const router = useRouter();
+  const canViewWorkspaceActivity =
+    user?.role === "ADMIN" || user?.role === "MANAGER";
   const [items, setItems] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
@@ -28,6 +34,15 @@ export default function AuditPage() {
   );
 
   useEffect(() => {
+    if (!isReady) return;
+    if (!canViewWorkspaceActivity) {
+      router.replace("/app");
+    }
+  }, [canViewWorkspaceActivity, isReady, router]);
+
+  useEffect(() => {
+    if (!canViewWorkspaceActivity) return;
+
     const run = async () => {
       setLoading(true);
       setError(null);
@@ -45,7 +60,11 @@ export default function AuditPage() {
     };
 
     void run();
-  }, [query]);
+  }, [canViewWorkspaceActivity, query]);
+
+  if (!isReady || !canViewWorkspaceActivity) {
+    return null;
+  }
 
   return (
     <div className="stack">
