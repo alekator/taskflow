@@ -1276,6 +1276,15 @@ a {
   font-weight: 700;
 }
 
+.auth-switch-link {
+  margin-top: 12px;
+}
+
+.auth-switch-link a {
+  color: var(--accent-700);
+  font-weight: 700;
+}
+
 .user-menu {
   border-top: 1px solid rgb(17 20 15 / 10%);
   display: grid;
@@ -1391,8 +1400,8 @@ a {
 }
 
 .workspace-link-active {
-  background: #202631;
-  color: #f5f7fb;
+  background: rgb(154 199 115 / 14%);
+  color: var(--ink-950);
 }
 
 .workspace-panel {
@@ -1513,6 +1522,17 @@ a {
   grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
 }
 
+.workspace-task-card-clickable {
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.workspace-task-card-clickable:hover {
+  border-color: rgb(17 20 15 / 18%);
+  box-shadow: 0 10px 18px rgb(17 20 15 / 8%);
+  transform: translateY(-1px);
+}
+
 .workspace-task-card-main {
   display: grid;
   gap: 10px;
@@ -1552,6 +1572,29 @@ a {
   justify-items: end;
   min-width: 0;
   padding-left: 12px;
+}
+
+.workspace-user-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.workspace-user-headline {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-user-headline .meta {
+  font-size: 0.9rem;
+}
+
+.workspace-user-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {
