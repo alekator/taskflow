@@ -36,7 +36,7 @@ export class ProjectsController {
 
   @Get()
   findMy(@Req() req: AuthedRequest, @Query() query: ListProjectsQueryDto) {
-    return this.projects.findMy(req.user.id, query);
+    return this.projects.findMy(req.user.id, req.user.role, query);
   }
 
   @Get(':projectId/members')

@@ -41,8 +41,112 @@ export class TasksService {
     return member.role;
   }
 
+  private async ensureAssignableProjectUser(
+    projectId: string,
+    assigneeId: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: assigneeId },
+      select: { id: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ownerId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
+    if (project.ownerId === assigneeId) {
+      return;
+    }
+
+    const member = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: assigneeId } },
+      select: { userId: true },
+    });
+    if (!member) throw new ForbiddenException('Assignee is not in project');
+  }
+
+  private buildWorkspaceAccessWhere(userId: string, userRole: string) {
+    if (userRole === 'ADMIN') {
+      return {};
+    }
+
+    return {
+      project: {
+        OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+      },
+    };
+  }
+
+  private buildTaskWhere(query: ListTasksQueryDto): Prisma.TaskWhereInput {
+    return {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
+      ...(query.projectId ? { projectId: query.projectId } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { title: { contains: query.search, mode: 'insensitive' } },
+              {
+                description: { contains: query.search, mode: 'insensitive' },
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  async listWorkspace(
+    userId: string,
+    userRole: string,
+    query: ListTasksQueryDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+
+    const where: Prisma.TaskWhereInput = {
+      AND: [
+        this.buildWorkspaceAccessWhere(userId, userRole),
+        this.buildTaskWhere(query),
+      ],
+    };
+
+    const orderBy: Prisma.TaskOrderByWithRelationInput[] = query.sortBy
+      ? [{ [query.sortBy]: query.sortOrder ?? 'asc' }, { createdAt: 'asc' }]
+      : [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
+
+    const [total, items] = await this.prisma.$transaction([
+      this.prisma.task.count({ where }),
+      this.prisma.task.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          project: {
+            select: { id: true, name: true },
+          },
+          assignee: {
+            select: { id: true, email: true, name: true },
+          },
+        },
+      }),
+    ]);
+
+    return toPaginatedResult(items, page, limit, total);
+  }
+
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
     const role = await this.getMyProjectRole(userId, projectId);
+    const assigneeId =
+      role === ProjectRole.MEMBER ? userId : (dto.assigneeId ?? undefined);
+
+    if (role !== ProjectRole.MEMBER && assigneeId) {
+      await this.ensureAssignableProjectUser(projectId, assigneeId);
+    }
 
     const created = await this.prisma.task.create({
       data: {
@@ -53,8 +157,7 @@ export class TasksService {
         order: dto.order,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         projectId,
-
-        assigneeId: role === ProjectRole.MEMBER ? userId : undefined,
+        assigneeId,
       },
     });
 
@@ -84,20 +187,8 @@ export class TasksService {
     const limit = query.limit ?? 20;
 
     const where: Prisma.TaskWhereInput = {
+      ...this.buildTaskWhere(query),
       projectId,
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.priority ? { priority: query.priority } : {}),
-      ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { title: { contains: query.search, mode: 'insensitive' } },
-              {
-                description: { contains: query.search, mode: 'insensitive' },
-              },
-            ],
-          }
-        : {}),
     };
 
     const orderBy: Prisma.TaskOrderByWithRelationInput[] = query.sortBy
@@ -250,25 +341,7 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException('Task not found');
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: assigneeId },
-      select: { id: true },
-    });
-    if (!user) throw new NotFoundException('User not found');
-
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { ownerId: true },
-    });
-    if (!project) throw new NotFoundException('Project not found');
-
-    if (project.ownerId !== assigneeId) {
-      const member = await this.prisma.projectMember.findUnique({
-        where: { projectId_userId: { projectId, userId: assigneeId } },
-        select: { userId: true },
-      });
-      if (!member) throw new ForbiddenException('Assignee is not in project');
-    }
+    await this.ensureAssignableProjectUser(projectId, assigneeId);
 
     const updated = await this.prisma.task.update({
       where: { id: taskId },

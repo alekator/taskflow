@@ -85,3 +85,14 @@ export class TasksController {
     return this.tasks.unassign(req.user.id, projectId, id);
   }
 }
+
+@Controller('tasks')
+@UseGuards(JwtAuthGuard)
+export class WorkspaceTasksController {
+  constructor(private tasks: TasksService) {}
+
+  @Get()
+  list(@Req() req: AuthedRequest, @Query() query: ListTasksQueryDto) {
+    return this.tasks.listWorkspace(req.user.id, req.user.role, query);
+  }
+}

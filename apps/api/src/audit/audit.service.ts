@@ -77,14 +77,51 @@ export class AuditService {
       where: { id: requesterId },
       select: { role: true },
     });
-    if (requester?.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Only ADMIN can read audit logs');
+
+    let scopedProjectIds: string[] | null = null;
+
+    if (requester?.role === UserRole.ADMIN) {
+      scopedProjectIds = null;
+    } else if (requester?.role === UserRole.MANAGER) {
+      const managedProjects = await this.prisma.project.findMany({
+        where: {
+          OR: [
+            { ownerId: requesterId },
+            {
+              members: {
+                some: {
+                  userId: requesterId,
+                  role: 'MANAGER',
+                },
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      });
+
+      scopedProjectIds = managedProjects.map((project) => project.id);
+    } else {
+      throw new ForbiddenException('Only ADMIN or MANAGER can read audit logs');
     }
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
     const where: Prisma.AuditLogWhereInput = {
+      ...(scopedProjectIds
+        ? {
+            projectId: {
+              in: query.projectId
+                ? scopedProjectIds.filter(
+                    (projectId) => projectId === query.projectId,
+                  )
+                : scopedProjectIds,
+            },
+          }
+        : query.projectId
+          ? { projectId: query.projectId }
+          : {}),
       ...(query.action ? { action: query.action } : {}),
       ...(query.entityType ? { entityType: query.entityType } : {}),
       ...(query.entityId ? { entityId: query.entityId } : {}),

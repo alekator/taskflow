@@ -67,6 +67,33 @@ describe('TasksService', () => {
     expect(callArg.data.assigneeId).toBe('u1');
   });
 
+  it('create lets owner assign task at creation time', async () => {
+    prisma.project.findUnique.mockResolvedValueOnce({
+      id: 'p1',
+      ownerId: 'owner',
+    });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: 'u2' });
+    prisma.project.findUnique.mockResolvedValueOnce({
+      ownerId: 'owner',
+    });
+    prisma.projectMember.findUnique.mockResolvedValueOnce({
+      userId: 'u2',
+    });
+    prisma.task.create.mockResolvedValueOnce({ id: 't2', assigneeId: 'u2' });
+
+    const result = await service.create('owner', 'p1', {
+      title: 'Assigned task',
+      assigneeId: 'u2',
+    });
+
+    expect(result).toEqual({ id: 't2', assigneeId: 'u2' });
+    const calls = prisma.task.create.mock.calls as Array<
+      [{ data: { assigneeId?: string } }]
+    >;
+    const [callArg] = calls[0];
+    expect(callArg.data.assigneeId).toBe('u2');
+  });
+
   it('list throws NotFound when project is missing', async () => {
     prisma.project.findUnique.mockResolvedValueOnce(null);
 

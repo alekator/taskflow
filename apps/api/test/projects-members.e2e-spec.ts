@@ -218,6 +218,19 @@ describe('Projects / Members (e2e)', () => {
     await app.close();
   });
 
+  it('projects: rejects too long name or description on create', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+
+    await request(server)
+      .post(api('/projects'))
+      .set(authHeader(adminLogin.accessToken))
+      .send({
+        name: 'p'.repeat(101),
+        description: 'd'.repeat(1001),
+      })
+      .expect(400);
+  });
+
   it('members: only project member can list members', async () => {
     const { user1 } = await ensureUsers();
 
@@ -262,6 +275,24 @@ describe('Projects / Members (e2e)', () => {
     expect(body.meta.limit).toBe(20);
     expect(body.meta.total).toBeGreaterThanOrEqual(1);
     expect(body.meta.totalPages).toBeGreaterThanOrEqual(1);
+  });
+
+  it('projects: ADMIN sees projects created by other users too', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const userLogin = await login(creds.user1.email, creds.user1.password);
+
+    await createProject(adminLogin.accessToken, { name: 'Admin Project' });
+    await createProject(userLogin.accessToken, { name: 'User Project' });
+
+    const res = await listProjects(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      items: Array<{ id: string; name: string }>;
+      meta: { page: number; limit: number; total: number; totalPages: number };
+    };
+
+    const names = body.items.map((item) => item.name);
+    expect(names).toContain('Admin Project');
+    expect(names).toContain('User Project');
   });
 
   it('members: OWNER can add MEMBER (default role)', async () => {

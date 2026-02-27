@@ -5,6 +5,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 const taskSortFields = [
   'order',
   'createdAt',
+  'updatedAt',
   'dueDate',
   'title',
   'priority',
@@ -28,6 +29,10 @@ export class ListTasksQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   assigneeId?: string;
+
+  @IsOptional()
+  @IsString()
+  projectId?: string;
 
   @IsOptional()
   @IsIn(taskSortFields)

@@ -31,6 +31,12 @@ describe('Audit Logs (e2e)', () => {
       name: 'User One',
       role: 'USER' as const,
     },
+    manager: {
+      email: 'manager@test.com',
+      password: '123456',
+      name: 'Manager',
+      role: 'MANAGER' as const,
+    },
   };
 
   const api = (path: string) => `/api${path}`;
@@ -63,14 +69,29 @@ describe('Audit Logs (e2e)', () => {
   async function createProject(
     accessToken: string,
     name: string,
-  ): Promise<void> {
-    await request(server)
+  ): Promise<{ id: string }> {
+    const res = await request(server)
       .post(api('/projects'))
       .set(authHeader(accessToken))
       .send({
         name,
         description: 'Audit e2e project',
       })
+      .expect(201);
+
+    return res.body as { id: string };
+  }
+
+  async function addMember(
+    accessToken: string,
+    projectId: string,
+    userId: string,
+    role: 'OWNER' | 'MANAGER' | 'MEMBER',
+  ): Promise<void> {
+    await request(server)
+      .post(api(`/projects/${projectId}/members`))
+      .set(authHeader(accessToken))
+      .send({ userId, role })
       .expect(201);
   }
 
@@ -168,5 +189,44 @@ describe('Audit Logs (e2e)', () => {
 
     const userLogin = await login(creds.user1.email, creds.user1.password);
     await listAuditLogs(userLogin.accessToken).expect(403);
+  });
+
+  it('MANAGER can list only logs from managed projects', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const managerLogin = await login(
+      creds.manager.email,
+      creds.manager.password,
+    );
+
+    const managedProject = await createProject(
+      adminLogin.accessToken,
+      'Managed Audit Project',
+    );
+    const foreignProject = await createProject(
+      adminLogin.accessToken,
+      'Foreign Audit Project',
+    );
+
+    await addMember(
+      adminLogin.accessToken,
+      managedProject.id,
+      managerLogin.user.id,
+      'MANAGER',
+    );
+
+    const res = await listAuditLogs(managerLogin.accessToken).expect(200);
+
+    const body = res.body as {
+      items: Array<{ projectId: string | null; action: string }>;
+      meta: { total: number };
+    };
+
+    expect(body.meta.total).toBeGreaterThanOrEqual(1);
+    expect(
+      body.items.every((item) => item.projectId === managedProject.id),
+    ).toBe(true);
+    expect(
+      body.items.some((item) => item.projectId === foreignProject.id),
+    ).toBe(false);
   });
 });

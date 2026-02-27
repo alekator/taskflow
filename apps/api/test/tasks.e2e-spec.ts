@@ -156,6 +156,7 @@ describe('Tasks (e2e)', () => {
       priority: TaskPriority;
       order: number;
       dueDate: string;
+      assigneeId: string;
     }>,
   ) {
     const res = await request(server)
@@ -168,6 +169,7 @@ describe('Tasks (e2e)', () => {
         priority: dto?.priority,
         order: dto?.order,
         dueDate: dto?.dueDate,
+        assigneeId: dto?.assigneeId,
       })
       .expect(201);
 
@@ -201,6 +203,15 @@ describe('Tasks (e2e)', () => {
 
     if (query) req.query(query);
 
+    return req;
+  }
+
+  function listWorkspaceTasks(
+    accessToken: string,
+    query?: Record<string, string | number>,
+  ): SupertestTest {
+    const req = request(server).get(api('/tasks')).set(authHeader(accessToken));
+    if (query) req.query(query);
     return req;
   }
 
@@ -367,6 +378,57 @@ describe('Tasks (e2e)', () => {
       title: 'Manager task',
     });
     expect(t2.assigneeId).toBeNull();
+  });
+
+  it('tasks: OWNER can assign task during creation, MEMBER still gets self assignment', async () => {
+    const { user1, user2 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const project = await createProject(adminLogin.accessToken);
+
+    await addMember(
+      adminLogin.accessToken,
+      project.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+    await addMember(
+      adminLogin.accessToken,
+      project.id,
+      user2.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    const ownerAssigned = await createTask(adminLogin.accessToken, project.id, {
+      title: 'Owner assigned task',
+      assigneeId: user2.id,
+    });
+    expect(ownerAssigned.assigneeId).toBe(user2.id);
+
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+    const memberAssigned = await createTask(
+      memberLogin.accessToken,
+      project.id,
+      {
+        title: 'Member task',
+        assigneeId: user2.id,
+      },
+    );
+    expect(memberAssigned.assigneeId).toBe(user1.id);
+  });
+
+  it('tasks: rejects too long title or description on create', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const project = await createProject(adminLogin.accessToken);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/tasks`))
+      .set(authHeader(adminLogin.accessToken))
+      .send({
+        title: 't'.repeat(81),
+        description: 'd'.repeat(301),
+      })
+      .expect(400);
   });
 
   it('tasks: MEMBER can update/delete only own assigned tasks', async () => {
@@ -695,5 +757,167 @@ describe('Tasks (e2e)', () => {
     expect(body.meta.limit).toBe(1);
     expect(body.meta.total).toBe(1);
     expect(body.meta.totalPages).toBe(1);
+  });
+
+  it('tasks: supports TESTING workflow status in create update and filters', async () => {
+    const { user1 } = await ensureUsers();
+    const testingStatus: TaskStatus = 'TESTING';
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const project = await createProject(adminLogin.accessToken);
+
+    await addMember(
+      adminLogin.accessToken,
+      project.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+
+    const created = await createTask(memberLogin.accessToken, project.id, {
+      title: 'Testing stage task',
+      status: testingStatus,
+    });
+
+    const updated = await updateTask(
+      memberLogin.accessToken,
+      project.id,
+      created.id,
+      { status: testingStatus },
+      await getTaskVersion(created.id),
+    ).expect(200);
+
+    expect((updated.body as { status: TaskStatus }).status).toBe(testingStatus);
+
+    const res = await listTasks(memberLogin.accessToken, project.id, {
+      status: testingStatus,
+      sortBy: 'createdAt',
+      sortOrder: 'asc',
+    }).expect(200);
+
+    const body = res.body as {
+      items: Array<{ title: string; status: TaskStatus }>;
+      meta: { total: number };
+    };
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].title).toBe('Testing stage task');
+    expect(body.items[0].status).toBe(testingStatus);
+    expect(body.meta.total).toBe(1);
+  });
+
+  it('tasks workspace: ADMIN sees all tasks across all projects', async () => {
+    const { user1 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const projectOne = await createProject(adminLogin.accessToken, {
+      name: 'Workspace A',
+    });
+    const projectTwo = await createProject(adminLogin.accessToken, {
+      name: 'Workspace B',
+    });
+
+    await addMember(
+      adminLogin.accessToken,
+      projectOne.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    await createTask(adminLogin.accessToken, projectOne.id, {
+      title: 'Admin task A',
+      order: 1,
+    });
+    await createTask(adminLogin.accessToken, projectTwo.id, {
+      title: 'Admin task B',
+      order: 1,
+    });
+
+    const res = await listWorkspaceTasks(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      items: Array<{
+        id: string;
+        title: string;
+        project: { id: string; name: string };
+        assignee: { id: string; email: string; name: string | null } | null;
+      }>;
+      meta: { total: number };
+    };
+
+    expect(body.meta.total).toBe(2);
+    expect(body.items.map((item) => item.title).sort()).toEqual([
+      'Admin task A',
+      'Admin task B',
+    ]);
+    expect(body.items.every((item) => item.project?.id)).toBe(true);
+  });
+
+  it('tasks workspace: non-admin sees tasks only from accessible projects', async () => {
+    const { user1, user2, user3 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const visibleProject = await createProject(adminLogin.accessToken, {
+      name: 'Visible Project',
+    });
+    const hiddenProject = await createProject(adminLogin.accessToken, {
+      name: 'Hidden Project',
+    });
+
+    await addMember(
+      adminLogin.accessToken,
+      visibleProject.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+    await addMember(
+      adminLogin.accessToken,
+      visibleProject.id,
+      user2.id,
+      ProjectRole.MANAGER,
+    ).expect(201);
+
+    await addMember(
+      adminLogin.accessToken,
+      hiddenProject.id,
+      user3.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    await createTask(adminLogin.accessToken, visibleProject.id, {
+      title: 'Visible task',
+      assigneeId: user1.id,
+    });
+    await createTask(adminLogin.accessToken, hiddenProject.id, {
+      title: 'Hidden task',
+      assigneeId: user3.id,
+    });
+
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+    const managerLogin = await login(creds.user2.email, creds.user2.password);
+
+    const memberRes = await listWorkspaceTasks(memberLogin.accessToken).expect(
+      200,
+    );
+    const managerRes = await listWorkspaceTasks(
+      managerLogin.accessToken,
+    ).expect(200);
+
+    const memberBody = memberRes.body as {
+      items: Array<{ title: string; projectId: string }>;
+      meta: { total: number };
+    };
+    const managerBody = managerRes.body as {
+      items: Array<{ title: string; projectId: string }>;
+      meta: { total: number };
+    };
+
+    expect(memberBody.meta.total).toBe(1);
+    expect(memberBody.items[0].title).toBe('Visible task');
+    expect(memberBody.items[0].projectId).toBe(visibleProject.id);
+
+    expect(managerBody.meta.total).toBe(1);
+    expect(managerBody.items[0].title).toBe('Visible task');
+    expect(managerBody.items[0].projectId).toBe(visibleProject.id);
   });
 });

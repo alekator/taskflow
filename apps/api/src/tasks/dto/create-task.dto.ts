@@ -5,16 +5,19 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(80)
   title!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(300)
   description?: string;
 
   @IsOptional()
@@ -32,4 +35,9 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  assigneeId?: string;
 }

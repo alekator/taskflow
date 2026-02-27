@@ -81,13 +81,16 @@ export class ProjectsService {
     return project;
   }
 
-  async findMy(userId: string, query: ListProjectsQueryDto) {
+  async findMy(userId: string, userRole: string, query: ListProjectsQueryDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const accessWhere: Prisma.ProjectWhereInput = {
-      OR: [{ ownerId: userId }, { members: { some: { userId } } }],
-    };
+    const accessWhere: Prisma.ProjectWhereInput =
+      userRole === 'ADMIN'
+        ? {}
+        : {
+            OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+          };
 
     const where: Prisma.ProjectWhereInput = query.search
       ? {
