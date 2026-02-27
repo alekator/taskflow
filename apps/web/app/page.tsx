@@ -20,6 +20,7 @@ export default function Home() {
         <p className="brand">TaskFlow</p>
         <nav className="nav">
           <Link href="/auth/login">Sign in</Link>
+          <Link href="/auth/register">Register</Link>
           <Link href="/app" className="button button-primary">
             Open app
           </Link>
@@ -39,6 +40,9 @@ export default function Home() {
           </Link>
           <Link href="/auth/login" className="button button-ghost">
             Sign in
+          </Link>
+          <Link href="/auth/register" className="button button-ghost">
+            Register
           </Link>
         </div>
       </section>

@@ -6,6 +6,14 @@ type LoginInput = {
   password: string;
 };
 
+export type RegisterInput = {
+  email: string;
+  password: string;
+  name?: string;
+  role?: "USER" | "MANAGER" | "ADMIN";
+  inviteCode?: string;
+};
+
 type LoginResponse = {
   user: SessionUser;
   accessToken: string;
@@ -86,6 +94,16 @@ async function request<TResponse>(
 
 export async function login(input: LoginInput): Promise<AuthSession> {
   const data = await request<LoginResponse>("POST", "/auth/login", input);
+
+  return {
+    user: data.user,
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+  };
+}
+
+export async function register(input: RegisterInput): Promise<AuthSession> {
+  const data = await request<LoginResponse>("POST", "/auth/register", input);
 
   return {
     user: data.user,

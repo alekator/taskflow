@@ -1,10 +1,16 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RegisterDto } from './dto/register.dto';
 
 type PublicUser = {
   id: string;
@@ -17,6 +23,8 @@ type PublicUser = {
 export class AuthService {
   private readonly accessSecret: string;
   private readonly refreshSecret: string;
+  private readonly managerInviteCode: string | null;
+  private readonly adminInviteCode: string | null;
 
   constructor(
     private prisma: PrismaService,
@@ -29,6 +37,9 @@ export class AuthService {
     if (!refresh) throw new Error('JWT_REFRESH_SECRET is not set');
     this.accessSecret = access;
     this.refreshSecret = refresh;
+    this.managerInviteCode =
+      process.env.AUTH_MANAGER_INVITE_CODE?.trim() ?? null;
+    this.adminInviteCode = process.env.AUTH_ADMIN_INVITE_CODE?.trim() ?? null;
   }
 
   private signAccessToken(user: { id: string; email: string; role: UserRole }) {
@@ -67,13 +78,29 @@ export class AuthService {
     return { sub: p.sub, type: 'refresh', jti: p.jti };
   }
 
-  async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+  private getRequestedRole(input: RegisterDto): UserRole {
+    return input.role ?? UserRole.USER;
+  }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+  private ensureInviteForRole(role: UserRole, inviteCode?: string) {
+    if (role === UserRole.USER) return;
 
+    const expectedCode =
+      role === UserRole.ADMIN ? this.adminInviteCode : this.managerInviteCode;
+
+    if (!expectedCode || inviteCode !== expectedCode) {
+      throw new ForbiddenException(
+        `${role} registration requires a valid invite code`,
+      );
+    }
+  }
+
+  private async buildSession(user: {
+    id: string;
+    email: string;
+    role: UserRole;
+    name: string | null;
+  }) {
     const accessToken = this.signAccessToken({
       id: user.id,
       email: user.email,
@@ -81,7 +108,6 @@ export class AuthService {
     });
 
     const refreshToken = this.signRefreshToken({ id: user.id });
-
     const { jti } = this.verifyRefreshToken(refreshToken);
     const refreshJtiHash = await bcrypt.hash(jti, 10);
 
@@ -100,6 +126,67 @@ export class AuthService {
       name: user.name,
     };
 
+    return { user: publicUser, accessToken, refreshToken };
+  }
+
+  async register(input: RegisterDto) {
+    const email = input.email.trim().toLowerCase();
+    const requestedRole = this.getRequestedRole(input);
+
+    this.ensureInviteForRole(requestedRole, input.inviteCode);
+
+    const exists = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (exists) {
+      throw new ConflictException('Email is already registered');
+    }
+
+    const passwordHash = await bcrypt.hash(input.password, 10);
+    const created = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: requestedRole,
+        name: input.name?.trim() || null,
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        name: true,
+      },
+    });
+
+    const session = await this.buildSession(created);
+
+    await this.audit.log({
+      action: 'AUTH_REGISTER',
+      actorUserId: created.id,
+      entityType: 'user',
+      entityId: created.id,
+      payload: { email: created.email, role: created.role },
+    });
+
+    return session;
+  }
+
+  async login(email: string, password: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    const session = await this.buildSession({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    });
+
     await this.audit.log({
       action: 'AUTH_LOGIN',
       actorUserId: user.id,
@@ -108,7 +195,7 @@ export class AuthService {
       payload: { email: user.email },
     });
 
-    return { user: publicUser, accessToken, refreshToken };
+    return session;
   }
 
   async refresh(refreshToken: string) {

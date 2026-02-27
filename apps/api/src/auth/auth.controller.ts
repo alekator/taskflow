@@ -5,12 +5,19 @@ import { getAuthThrottleConfig } from '../config/runtime';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RegisterDto } from './dto/register.dto';
 
 const authThrottle = getAuthThrottleConfig();
 
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
+
+  @Throttle({ default: { limit: authThrottle.limit, ttl: authThrottle.ttl } })
+  @Post('register')
+  register(@Body() dto: RegisterDto) {
+    return this.auth.register(dto);
+  }
 
   @Throttle({ default: { limit: authThrottle.limit, ttl: authThrottle.ttl } })
   @Post('login')

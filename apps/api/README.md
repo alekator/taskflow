@@ -131,6 +131,7 @@ Base prefix: `/api`
 
 - `GET /health`
 - `POST /auth/login`
+- `POST /auth/register`
 - `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /projects`
@@ -205,6 +206,8 @@ pnpm run dev
 | `DATABASE_URL`         | yes      | PostgreSQL connection                         |
 | `JWT_ACCESS_SECRET`    | yes      | access token signing secret (min 16 chars)    |
 | `JWT_REFRESH_SECRET`   | yes      | refresh token signing secret (min 16 chars)   |
+| `AUTH_MANAGER_INVITE_CODE` | no  | invite code for self-registration as `MANAGER` |
+| `AUTH_ADMIN_INVITE_CODE`   | no  | invite code for self-registration as `ADMIN`   |
 | `CORS_ORIGINS`         | prod yes | comma-separated allowed origins in production |
 | `THROTTLE_TTL_MS`      | no       | global throttling window                      |
 | `THROTTLE_LIMIT`       | no       | global request limit per window               |
@@ -212,6 +215,22 @@ pnpm run dev
 | `AUTH_THROTTLE_LIMIT`  | no       | auth request limit per window                 |
 
 ## Contract Examples
+
+### Role-aware self registration
+
+```bash
+curl -X POST "http://localhost:3001/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"owner@example.com","password":"123456","name":"Owner"}'
+```
+
+`MANAGER` and `ADMIN` registration require matching invite codes:
+
+```bash
+curl -X POST "http://localhost:3001/api/auth/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"manager@example.com","password":"123456","role":"MANAGER","inviteCode":"<AUTH_MANAGER_INVITE_CODE>"}'
+```
 
 ### Idempotent project creation
 

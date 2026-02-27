@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { GuestOnly } from "../../../src/components/auth/guest-only";
-import { LoginForm } from "../../../src/components/auth/login-form";
+import { RegisterForm } from "../../../src/components/auth/register-form";
 import { ROUTES } from "../../../src/lib/routes";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   return (
     <Suspense fallback={<main className="landing"><p className="soft">Loading auth flow...</p></main>}>
       <GuestOnly>
@@ -17,31 +17,31 @@ export default function LoginPage() {
 
           <section className="login-layout">
             <article className="panel auth-panel">
-              <h1>Sign in</h1>
+              <h1>Create account</h1>
               <p>
-                Open your workspace and continue active project work.
+                Register with login and password, then open your workspace.
               </p>
-              <Suspense fallback={<p className="soft">Loading auth form...</p>}>
-                <LoginForm />
+              <Suspense fallback={<p className="soft">Loading registration form...</p>}>
+                <RegisterForm />
               </Suspense>
               <p className="meta auth-switch-link">
-                New to TaskFlow? <Link href={ROUTES.register}>Create account</Link>
+                Already have an account? <Link href={ROUTES.login}>Sign in</Link>
               </p>
             </article>
 
             <aside className="item-card login-aside">
-              <h2>Local access</h2>
+              <h2>Role model</h2>
               <p className="soft">
-                Seeded admin credentials for local development.
+                Everyone can register as Owner/Member. Manager and Admin require invite codes.
               </p>
               <div className="login-credentials">
-                <span className="meta">Email</span>
-                <strong>admin@test.com</strong>
-                <span className="meta">Password</span>
-                <strong>123456</strong>
+                <span className="meta">Owner / Member</span>
+                <strong>No code required</strong>
+                <span className="meta">Manager / Admin</span>
+                <strong>Invite code required</strong>
               </div>
               <p className="meta">
-                After sign in you land in <code>/app</code>.
+                Invite codes are configured via backend env vars.
               </p>
             </aside>
           </section>

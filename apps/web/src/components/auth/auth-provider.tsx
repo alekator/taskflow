@@ -8,7 +8,13 @@ import {
   useMemo,
   useState,
 } from "react";
-import { getMe, login as loginApi, logout as logoutApi } from "../../lib/auth/api";
+import {
+  getMe,
+  login as loginApi,
+  logout as logoutApi,
+  register as registerApi,
+  type RegisterInput,
+} from "../../lib/auth/api";
 import { clearSession, readSession, writeSession } from "../../lib/auth/storage";
 import type { AuthSession, SessionUser } from "../../lib/types";
 
@@ -21,6 +27,7 @@ type AuthState = {
 
 type AuthContextValue = AuthState & {
   login: (email: string, password: string) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -80,6 +87,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const register = useCallback(async (input: RegisterInput) => {
+    const session = await registerApi(input);
+    writeSession(session);
+
+    setState({
+      isReady: true,
+      isAuthenticated: true,
+      user: session.user,
+      accessToken: session.accessToken,
+    });
+  }, []);
+
   const logout = useCallback(async () => {
     const current = readSession();
 
@@ -101,8 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ ...state, login, logout }),
-    [login, logout, state],
+    () => ({ ...state, login, register, logout }),
+    [login, logout, register, state],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
