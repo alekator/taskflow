@@ -99,6 +99,15 @@ export class TasksService {
     };
   }
 
+  private buildDefaultRoadmapData(taskId: string): Prisma.JsonObject {
+    return {
+      version: 1,
+      taskId,
+      viewport: { x: 0, y: 0, zoom: 1 },
+      elements: [],
+    };
+  }
+
   async listWorkspace(
     userId: string,
     userRole: string,
@@ -160,6 +169,58 @@ export class TasksService {
 
     if (!task) throw new NotFoundException('Task not found');
     return task;
+  }
+
+  async getWorkspaceTaskRoadmap(
+    userId: string,
+    userRole: string,
+    taskId: string,
+  ) {
+    await this.findWorkspaceTaskById(userId, userRole, taskId);
+
+    const roadmap = await this.prisma.taskRoadmap.findUnique({
+      where: { taskId },
+      select: { data: true, updatedAt: true },
+    });
+
+    return {
+      taskId,
+      data: roadmap?.data ?? this.buildDefaultRoadmapData(taskId),
+      updatedAt: roadmap?.updatedAt ?? null,
+    };
+  }
+
+  async updateWorkspaceTaskRoadmap(
+    userId: string,
+    userRole: string,
+    taskId: string,
+    data: Prisma.InputJsonValue,
+  ) {
+    const task = await this.findWorkspaceTaskById(userId, userRole, taskId);
+
+    const saved = await this.prisma.taskRoadmap.upsert({
+      where: { taskId },
+      create: { taskId, data },
+      update: { data },
+      select: { data: true, updatedAt: true },
+    });
+
+    await this.audit.log({
+      action: 'TASK_ROADMAP_UPDATE',
+      actorUserId: userId,
+      entityType: 'task',
+      entityId: taskId,
+      projectId: task.projectId,
+      payload: {
+        roadmapUpdatedAt: saved.updatedAt.toISOString(),
+      },
+    });
+
+    return {
+      taskId,
+      data: saved.data,
+      updatedAt: saved.updatedAt,
+    };
   }
 
   async create(userId: string, projectId: string, dto: CreateTaskDto) {

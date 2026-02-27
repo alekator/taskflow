@@ -224,6 +224,23 @@ describe('Tasks (e2e)', () => {
       .set(authHeader(accessToken));
   }
 
+  function getTaskRoadmap(accessToken: string, taskId: string): SupertestTest {
+    return request(server)
+      .get(api(`/tasks/${taskId}/roadmap`))
+      .set(authHeader(accessToken));
+  }
+
+  function updateTaskRoadmap(
+    accessToken: string,
+    taskId: string,
+    data: Record<string, unknown>,
+  ): SupertestTest {
+    return request(server)
+      .patch(api(`/tasks/${taskId}/roadmap`))
+      .set(authHeader(accessToken))
+      .send({ data });
+  }
+
   function updateTask(
     accessToken: string,
     projectId: string,
@@ -976,5 +993,98 @@ describe('Tasks (e2e)', () => {
     await getWorkspaceTask(memberLogin.accessToken, visibleTask.id).expect(200);
     await getWorkspaceTask(memberLogin.accessToken, hiddenTask.id).expect(404);
     await getWorkspaceTask(adminLogin.accessToken, hiddenTask.id).expect(200);
+  });
+
+  it('tasks roadmap: GET/PATCH is scoped and persists per task', async () => {
+    const { user1, user3 } = await ensureUsers();
+
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const visibleProject = await createProject(adminLogin.accessToken, {
+      name: 'Roadmap Visible',
+    });
+    const hiddenProject = await createProject(adminLogin.accessToken, {
+      name: 'Roadmap Hidden',
+    });
+
+    await addMember(
+      adminLogin.accessToken,
+      visibleProject.id,
+      user1.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+    await addMember(
+      adminLogin.accessToken,
+      hiddenProject.id,
+      user3.id,
+      ProjectRole.MEMBER,
+    ).expect(201);
+
+    const visibleTask = await createTask(
+      adminLogin.accessToken,
+      visibleProject.id,
+      {
+        title: 'Visible roadmap task',
+        assigneeId: user1.id,
+      },
+    );
+    const hiddenTask = await createTask(
+      adminLogin.accessToken,
+      hiddenProject.id,
+      {
+        title: 'Hidden roadmap task',
+        assigneeId: user3.id,
+      },
+    );
+
+    const memberLogin = await login(creds.user1.email, creds.user1.password);
+
+    const readDefault = await getTaskRoadmap(
+      memberLogin.accessToken,
+      visibleTask.id,
+    ).expect(200);
+    const defaultBody = readDefault.body as {
+      taskId: string;
+      data: { elements: unknown[] };
+      updatedAt: string | null;
+    };
+    expect(defaultBody.taskId).toBe(visibleTask.id);
+    expect(defaultBody.updatedAt).toBeNull();
+    expect(defaultBody.data.elements).toEqual([]);
+
+    const updated = await updateTaskRoadmap(
+      memberLogin.accessToken,
+      visibleTask.id,
+      {
+        version: 1,
+        viewport: { x: 32, y: -14, zoom: 1.15 },
+        elements: [
+          {
+            id: 'shape-1',
+            kind: 'rect',
+            x: 10,
+            y: 20,
+            width: 240,
+            height: 120,
+          },
+        ],
+      },
+    ).expect(200);
+
+    const updatedBody = updated.body as {
+      data: {
+        viewport: { x: number; y: number; zoom: number };
+        elements: Array<{ id: string; kind: string }>;
+      };
+      updatedAt: string;
+    };
+    expect(updatedBody.updatedAt).toBeTruthy();
+    expect(updatedBody.data.viewport.zoom).toBe(1.15);
+    expect(updatedBody.data.elements[0].id).toBe('shape-1');
+
+    await getTaskRoadmap(memberLogin.accessToken, hiddenTask.id).expect(404);
+    await updateTaskRoadmap(memberLogin.accessToken, hiddenTask.id, {
+      version: 1,
+      elements: [],
+    }).expect(404);
   });
 });

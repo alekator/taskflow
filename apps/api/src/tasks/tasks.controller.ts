@@ -11,12 +11,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/request-user.type';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { ListTasksQueryDto } from './dto/list-tasks-query.dto';
+import { UpdateTaskRoadmapDto } from './dto/update-task-roadmap.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TasksService } from './tasks.service';
 
@@ -99,5 +101,24 @@ export class WorkspaceTasksController {
   @Get(':id')
   findOne(@Req() req: AuthedRequest, @Param('id') id: string) {
     return this.tasks.findWorkspaceTaskById(req.user.id, req.user.role, id);
+  }
+
+  @Get(':id/roadmap')
+  getRoadmap(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.tasks.getWorkspaceTaskRoadmap(req.user.id, req.user.role, id);
+  }
+
+  @Patch(':id/roadmap')
+  updateRoadmap(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskRoadmapDto,
+  ) {
+    return this.tasks.updateWorkspaceTaskRoadmap(
+      req.user.id,
+      req.user.role,
+      id,
+      dto.data as Prisma.InputJsonValue,
+    );
   }
 }

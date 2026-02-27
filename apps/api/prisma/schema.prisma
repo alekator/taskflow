@@ -99,6 +99,19 @@ model Task {
 
   assigneeId String?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  roadmap    TaskRoadmap?
+}
+
+model TaskRoadmap {
+  id        String   @id @default(cuid())
+  taskId    String   @unique
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
 }
 
 model AuditLog {

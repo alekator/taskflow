@@ -31,6 +31,39 @@ export type WorkspaceTask = Task & {
   } | null;
 };
 
+export type TaskRoadmapElementType = "path" | "rect" | "arrow" | "text" | "image";
+
+export type TaskRoadmapElement = {
+  id: string;
+  type: TaskRoadmapElementType;
+  x: number;
+  y: number;
+  stroke?: string;
+  strokeWidth?: number;
+  fill?: string;
+  points?: Array<{ x: number; y: number }>;
+  width?: number;
+  height?: number;
+  toX?: number;
+  toY?: number;
+  text?: string;
+  fontSize?: number;
+  imageDataUrl?: string;
+};
+
+export type TaskRoadmapData = {
+  version: number;
+  taskId: string;
+  viewport: { x: number; y: number; zoom: number };
+  elements: TaskRoadmapElement[];
+};
+
+export type TaskRoadmapResponse = {
+  taskId: string;
+  data: TaskRoadmapData;
+  updatedAt: string | null;
+};
+
 export async function listProjectTasks(
   projectId: string,
   params?: {
@@ -72,6 +105,20 @@ export async function listWorkspaceTasks(params?: {
 
 export async function getWorkspaceTask(taskId: string): Promise<WorkspaceTask> {
   return authFetch<WorkspaceTask>(`/tasks/${taskId}`);
+}
+
+export async function getTaskRoadmap(taskId: string): Promise<TaskRoadmapResponse> {
+  return authFetch<TaskRoadmapResponse>(`/tasks/${taskId}/roadmap`);
+}
+
+export async function updateTaskRoadmap(
+  taskId: string,
+  data: TaskRoadmapData,
+): Promise<TaskRoadmapResponse> {
+  return authFetch<TaskRoadmapResponse>(`/tasks/${taskId}/roadmap`, {
+    method: "PATCH",
+    body: { data },
+  });
 }
 
 export async function createProjectTask(

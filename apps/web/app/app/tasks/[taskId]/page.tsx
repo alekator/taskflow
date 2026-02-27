@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { getWorkspaceTask, type WorkspaceTask } from "../../../../src/lib/tasks/api";
 import { getErrorDetails } from "../../../../src/lib/errors";
+import { TaskRoadmapPanel } from "../../../../src/components/tasks/task-roadmap-panel";
 
 function formatStatus(status: WorkspaceTask["status"]) {
   return status === "IN_PROGRESS" ? "In progress" : status.toLowerCase();
@@ -80,9 +81,13 @@ export default function TaskDetailsPage() {
           <span className="badge badge-neutral">{task.priority}</span>
           <span className="meta">Version: v{task.version}</span>
         </div>
-        <p>{task.description || "No description yet."}</p>
+        <div className="task-description-block">
+          <h2>Description</h2>
+          <p>{task.description || "No description yet."}</p>
+        </div>
       </section>
+
+      <TaskRoadmapPanel taskId={task.id} />
     </div>
   );
 }
-
