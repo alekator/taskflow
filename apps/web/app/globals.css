@@ -254,8 +254,8 @@ a {
 
 .shell {
   margin: 0 auto;
-  max-width: 1680px;
-  padding: 14px 16px 24px;
+  max-width: 1860px;
+  padding: 14px 12px 24px;
 }
 
 .shell-grid {
@@ -266,7 +266,7 @@ a {
 
 .shell-grid-workspace {
   align-items: start;
-  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-columns: 188px minmax(0, 1fr);
 }
 
 .sidebar {
