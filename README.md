@@ -88,6 +88,47 @@ pnpm --filter api run dev
 API base URL: `http://localhost:3001/api`  
 Swagger: `http://localhost:3001/api/docs`
 
+## Demo Workflow Simulation
+
+If tests cleared your data and you want a visually rich workspace again, you can recreate a full demo workflow with one command from the repo root:
+
+```bash
+pnpm seed:workflow
+```
+
+For a much denser, showcase-ready dataset meant for demos, visual reviews, and "selling" the workspace experience:
+
+```bash
+pnpm seed:workflow:heavy
+```
+
+What this creates:
+
+- 20 demo projects
+- ~140+ tasks with mixed statuses and priorities
+- multiple managers and users assigned across projects
+- roadmap data on a subset of tasks
+- audit activity (`PROJECT_CREATE`, `PROJECT_MEMBER_ADD`, `TASK_CREATE`, `TASK_UPDATE`, `TASK_ROADMAP_UPDATE`)
+
+The script is idempotent for its own demo dataset: it removes the previous demo batch and recreates it cleanly.
+
+Heavy profile creates a significantly richer environment:
+
+- 42 projects
+- 500+ tasks
+- more managers and users
+- denser audit activity for notifications, activity, and canvas visualization
+- more roadmap-rich tasks for stronger task detail demos
+
+Implementation location:
+
+- `apps/api/scripts/demo-workspace/seed.ts`
+
+Demo credentials after workflow seeding:
+
+- `admin@test.com` / `123456`
+- all generated `@demo.local` users also use `123456`
+
 ## Quality Commands
 
 From repo root:

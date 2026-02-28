@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
+    "seed:workflow": "tsx scripts/demo-workspace/seed.ts",
+    "seed:workflow:heavy": "tsx scripts/demo-workspace/seed.ts --profile=heavy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../src/components/auth/auth-provider";
+import { WorkspacePulseCanvas } from "../../src/components/overview/workspace-pulse-canvas";
 import { listAuditLogs, type AuditLog } from "../../src/lib/audit/api";
 import { getErrorDetails } from "../../src/lib/errors";
 import { listProjects, type Project } from "../../src/lib/projects/api";
 import { getRuntimeHealth, type RuntimeHealth } from "../../src/lib/system/api";
+import { listWorkspaceTasks, type WorkspaceTask } from "../../src/lib/tasks/api";
 
 type OverviewStats = {
   projects: number;
@@ -52,6 +54,7 @@ export default function AppHomePage() {
     lastAuditAt: null,
   });
   const [recentProjects, setRecentProjects] = useState<Project[]>([]);
+  const [workspaceTasks, setWorkspaceTasks] = useState<WorkspaceTask[]>([]);
   const [recentAudit, setRecentAudit] = useState<AuditLog[]>([]);
   const [health, setHealth] = useState<RuntimeHealth | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,17 +66,24 @@ export default function AppHomePage() {
       setError(null);
 
       try {
-        const [projectsRes, runtimeHealth] = await Promise.all([
+        const [projectsRes, tasksRes, runtimeHealth] = await Promise.all([
           listProjects({
             page: 1,
             limit: 4,
             sortBy: "createdAt",
             sortOrder: "desc",
           }),
+          listWorkspaceTasks({
+            page: 1,
+            limit: 24,
+            sortBy: "updatedAt",
+            sortOrder: "desc",
+          }),
           getRuntimeHealth(),
         ]);
 
         setRecentProjects(projectsRes.items);
+        setWorkspaceTasks(tasksRes.items);
         setHealth(runtimeHealth);
 
         if (canViewWorkspaceActivity) {
@@ -205,28 +215,16 @@ export default function AppHomePage() {
           </ul>
         </article>
 
-        <article className="item-card">
+        <article className="item-card workspace-pulse-card">
           <div className="panel-header panel-header-inline overview-card-header">
-            <h2>Recent projects</h2>
-            <span className="badge badge-neutral">Latest</span>
+            <h2>Living Workspace Canvas</h2>
+            <span className="badge badge-neutral">Live</span>
           </div>
-          {recentProjects.length === 0 ? (
-            <div className="empty-state">No projects yet. Create the first one to start planning.</div>
-          ) : (
-            <ul className="list">
-              {recentProjects.map((project) => (
-                <li key={project.id} className="workspace-row">
-                  <div>
-                    <strong>{project.name}</strong>
-                    <p className="meta">{project.description || "No description"}</p>
-                  </div>
-                  <Link href={`/app/projects/${project.id}`} className="workspace-row-action">
-                    Open
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          <WorkspacePulseCanvas
+            projects={recentProjects}
+            tasks={workspaceTasks}
+            recentAudit={recentAudit}
+          />
         </article>
       </section>
 
