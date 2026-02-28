@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/auth-provider";
 import {
   listAssistantHistory,
@@ -8,6 +9,10 @@ import {
   type AssistantMessage,
   type AssistantMessageMode,
 } from "../../lib/assistant/api";
+import {
+  listNotifications,
+  type NotificationItem,
+} from "../../lib/notifications/api";
 import { getErrorDetails } from "../../lib/errors";
 
 function formatTime(value: string) {
@@ -21,24 +26,65 @@ function modeLabel(mode: AssistantMessageMode) {
   return mode === "LLM" ? "LLM" : "Basic";
 }
 
+function notificationsSeenStorageKey(userId: string) {
+  return `taskflow.notifications.seen.${userId}`;
+}
+
+const MAX_SEEN_NOTIFICATIONS = 300;
+
 export function WorkspaceAssistant() {
+  const router = useRouter();
   const { isAuthenticated, user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
+  const [seenNotificationsReady, setSeenNotificationsReady] = useState(false);
   const [draft, setDraft] = useState("");
   const [helperMode, setHelperMode] = useState<AssistantMessageMode>("BASIC");
   const [llmEnabled, setLlmEnabled] = useState(false);
   const [remainingLimit, setRemainingLimit] = useState<number | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
   const loadedRef = useRef(false);
+  const notificationsLoadedRef = useRef(false);
 
   const canSend = useMemo(
     () => draft.trim().length > 0 && !sending,
     [draft, sending],
   );
+  const seenNotificationIdsSet = useMemo(
+    () => new Set(seenNotificationIds),
+    [seenNotificationIds],
+  );
+  const unreadCount = useMemo(() => {
+    return notifications.filter((item) => !seenNotificationIdsSet.has(item.id)).length;
+  }, [notifications, seenNotificationIdsSet]);
+
+  const loadNotifications = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoadingNotifications(true);
+    }
+    setNotificationsError(null);
+
+    try {
+      const res = await listNotifications({ page: 1, limit: 24 });
+      setNotifications(res.items);
+    } catch (err) {
+      const details = getErrorDetails(err);
+      setNotificationsError(details.message);
+    } finally {
+      if (!silent) {
+        setLoadingNotifications(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!open || loadedRef.current) return;
@@ -66,11 +112,83 @@ export function WorkspaceAssistant() {
   }, [open]);
 
   useEffect(() => {
+    if (!notificationsOpen && notificationsLoadedRef.current) return;
+    if (!notificationsOpen) return;
+
+    notificationsLoadedRef.current = true;
+    void loadNotifications();
+  }, [loadNotifications, notificationsOpen]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    void loadNotifications(true);
+
+    const timer = window.setInterval(() => {
+      void loadNotifications(true);
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [isAuthenticated, loadNotifications]);
+
+  useEffect(() => {
+    if (!user) {
+      setSeenNotificationIds([]);
+      setSeenNotificationsReady(false);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(
+        notificationsSeenStorageKey(user.id),
+      );
+      if (!raw) {
+        setSeenNotificationIds([]);
+        setSeenNotificationsReady(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setSeenNotificationIds([]);
+        setSeenNotificationsReady(true);
+        return;
+      }
+
+      setSeenNotificationIds(
+        parsed
+          .filter((value): value is string => typeof value === "string")
+          .slice(0, MAX_SEEN_NOTIFICATIONS),
+      );
+      setSeenNotificationsReady(true);
+    } catch {
+      setSeenNotificationIds([]);
+      setSeenNotificationsReady(true);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !seenNotificationsReady) return;
+
+    window.localStorage.setItem(
+      notificationsSeenStorageKey(user.id),
+      JSON.stringify(seenNotificationIds.slice(0, MAX_SEEN_NOTIFICATIONS)),
+    );
+  }, [seenNotificationIds, seenNotificationsReady, user]);
+
+  useEffect(() => {
     if (!open) return;
     const container = feedRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
   }, [messages, open]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    const container = notificationsRef.current;
+    if (!container) return;
+    container.scrollTop = 0;
+  }, [notifications, notificationsOpen]);
 
   if (!isAuthenticated || !user) {
     return null;
@@ -99,15 +217,44 @@ export function WorkspaceAssistant() {
     }
   };
 
+  const notificationToneClass = (item: NotificationItem) => {
+    if (item.type === "task") return "notifications-item-task";
+    if (item.type === "project") return "notifications-item-project";
+    if (item.type === "security") return "notifications-item-security";
+    return "notifications-item-workspace";
+  };
+
+  const markNotificationSeen = (notificationId: string) => {
+    setSeenNotificationIds((prev) => {
+      if (prev.includes(notificationId)) return prev;
+      return [notificationId, ...prev].slice(0, MAX_SEEN_NOTIFICATIONS);
+    });
+  };
+
   return (
     <>
       <button
         type="button"
         className="assistant-fab assistant-fab-notify"
-        aria-label="Notifications (coming soon)"
-        title="Notifications (coming soon)"
+        aria-label={notificationsOpen ? "Close notifications" : "Open notifications"}
+        data-testid="notifications-toggle"
+        title={notificationsOpen ? "Close notifications" : "Open notifications"}
+        onClick={() => {
+          setNotificationsOpen((prev) => {
+            const next = !prev;
+            if (next) {
+              setOpen(false);
+            }
+            return next;
+          });
+        }}
       >
         {"\u{1F514}"}
+        {unreadCount > 0 ? (
+          <span className="assistant-fab-badge" data-testid="notifications-count">
+            {Math.min(unreadCount, 9)}{unreadCount > 9 ? "+" : ""}
+          </span>
+        ) : null}
       </button>
 
       <button
@@ -115,10 +262,84 @@ export function WorkspaceAssistant() {
         className="assistant-fab assistant-fab-chat"
         aria-label={open ? "Close assistant chat" : "Open assistant chat"}
         title={open ? "Close assistant chat" : "Open assistant chat"}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => {
+            const next = !v;
+            if (next) {
+              setNotificationsOpen(false);
+            }
+            return next;
+          });
+        }}
       >
         {"\u{1F4AC}"}
       </button>
+
+      <section
+        className={`notifications-drawer${notificationsOpen ? " notifications-drawer-open" : ""}`}
+        aria-hidden={!notificationsOpen}
+        data-testid="notifications-drawer"
+      >
+        <header className="assistant-drawer-head notifications-drawer-head">
+          <div>
+            <strong>Notifications</strong>
+            <p className="meta">
+              Recent changes across tasks, projects, and workspace activity
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button button-ghost button-compact"
+            onClick={() => setNotificationsOpen(false)}
+          >
+            Hide
+          </button>
+        </header>
+
+        <div className="notifications-feed" ref={notificationsRef}>
+          {loadingNotifications ? <p className="meta">Loading notifications...</p> : null}
+          {notificationsError ? <p className="error-text">{notificationsError}</p> : null}
+          {!loadingNotifications && !notificationsError && notifications.length === 0 ? (
+            <div className="assistant-empty">
+              <p>No notifications yet. Relevant task and project changes will appear here.</p>
+            </div>
+          ) : null}
+
+          {notifications.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`notifications-item ${notificationToneClass(item)}${item.isOwnAction ? " notifications-item-own" : ""}${seenNotificationIdsSet.has(item.id) ? " notifications-item-seen" : ""}`}
+              data-testid="notification-item"
+              onMouseEnter={() => markNotificationSeen(item.id)}
+              onClick={() => {
+                markNotificationSeen(item.id);
+                setNotificationsOpen(false);
+                router.push(item.href);
+              }}
+            >
+              <div className="notifications-item-top">
+                <strong>{item.title}</strong>
+                <span className="meta">
+                  {new Date(item.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              <p>{item.message}</p>
+              <div className="notifications-item-meta">
+                <span className="badge badge-neutral">
+                  {item.type}
+                </span>
+                {item.projectId ? (
+                  <span className="meta">project {item.projectId.slice(0, 8)}</span>
+                ) : null}
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section
         className={`assistant-drawer${open ? " assistant-drawer-open" : ""}`}

@@ -22,6 +22,7 @@ import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
 import { IdempotencyModule } from './idempotency/idempotency.module';
 import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
     AssistantModule,
     AuditModule,
     IdempotencyModule,
+    NotificationsModule,
     RealtimeModule,
     AuthModule,
     UsersModule,

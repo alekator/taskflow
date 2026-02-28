@@ -167,60 +167,69 @@ export default function TaskDetailsPage() {
           </div>
 
           <aside className="task-description-block task-todo-block">
-            <h2>Quick actions</h2>
-            <p className="meta">Update task state directly from this page.</p>
+            <div className="task-quick-actions-card">
+              <div className="task-quick-actions-head">
+                <h2>Quick actions</h2>
+                <p className="meta">Update task state directly from this page.</p>
+              </div>
 
-            <div className="task-status-pills">
-              {(["TODO", "IN_PROGRESS", "TESTING", "DONE"] as const).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={`button button-compact task-status-btn ${statusValue === status ? "task-status-btn-active" : ""}`}
-                  onClick={() => setStatusValue(status)}
-                >
-                  {formatStatus(status)}
-                </button>
-              ))}
+              <div className="task-quick-actions-section">
+                <span className="task-quick-actions-label">Status</span>
+                <div className="task-status-pills">
+                  {(["TODO", "IN_PROGRESS", "TESTING", "DONE"] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      className={`button button-compact task-status-btn ${statusValue === status ? "task-status-btn-active" : ""}`}
+                      onClick={() => setStatusValue(status)}
+                    >
+                      {formatStatus(status)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="task-quick-actions-fields">
+                <label className="form-label">
+                  <span className="task-quick-actions-label">Priority</span>
+                  <select
+                    value={priorityValue}
+                    onChange={(event) => setPriorityValue(event.target.value as TaskPriority)}
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="URGENT">URGENT</option>
+                  </select>
+                </label>
+
+                <label className="form-label">
+                  <span className="task-quick-actions-label">Assignee</span>
+                  <select
+                    value={assigneeIdValue}
+                    onChange={(event) => setAssigneeIdValue(event.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.user.name || member.user.email}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {updateError ? <p className="error-text">{updateError}</p> : null}
+
+              <button
+                type="button"
+                className="button button-compact task-save-btn"
+                onClick={() => void onSaveTaskMeta()}
+                disabled={updating}
+              >
+                {updating ? "Saving..." : "Save changes"}
+              </button>
             </div>
-
-            <label className="form-label">
-              Priority
-              <select
-                value={priorityValue}
-                onChange={(event) => setPriorityValue(event.target.value as TaskPriority)}
-              >
-                <option value="LOW">LOW</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="HIGH">HIGH</option>
-                <option value="URGENT">URGENT</option>
-              </select>
-            </label>
-
-            <label className="form-label">
-              Assignee
-              <select
-                value={assigneeIdValue}
-                onChange={(event) => setAssigneeIdValue(event.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {members.map((member) => (
-                  <option key={member.userId} value={member.userId}>
-                    {member.user.name || member.user.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {updateError ? <p className="error-text">{updateError}</p> : null}
-
-            <button
-              type="button"
-              className="button button-compact task-save-btn"
-              onClick={() => void onSaveTaskMeta()}
-              disabled={updating}
-            >
-              {updating ? "Saving..." : "Save changes"}
-            </button>
           </aside>
         </div>
       </section>

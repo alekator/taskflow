@@ -107,26 +107,31 @@ export class AuditService {
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const projectIdQuery = query.projectId;
 
     const where: Prisma.AuditLogWhereInput = {
       ...(scopedProjectIds
         ? {
             projectId: {
-              in: query.projectId
+              in: projectIdQuery
                 ? scopedProjectIds.filter(
-                    (projectId) => projectId === query.projectId,
+                    (projectId) => projectId.includes(projectIdQuery),
                   )
                 : scopedProjectIds,
             },
           }
-        : query.projectId
-          ? { projectId: query.projectId }
+        : projectIdQuery
+          ? { projectId: this.contains(projectIdQuery) }
           : {}),
-      ...(query.action ? { action: query.action } : {}),
-      ...(query.entityType ? { entityType: query.entityType } : {}),
-      ...(query.entityId ? { entityId: query.entityId } : {}),
-      ...(query.actorUserId ? { actorUserId: query.actorUserId } : {}),
-      ...(query.requestId ? { requestId: query.requestId } : {}),
+      ...(query.action ? { action: this.contains(query.action) } : {}),
+      ...(query.entityType
+        ? { entityType: this.contains(query.entityType) }
+        : {}),
+      ...(query.entityId ? { entityId: this.contains(query.entityId) } : {}),
+      ...(query.actorUserId
+        ? { actorUserId: this.contains(query.actorUserId) }
+        : {}),
+      ...(query.requestId ? { requestId: this.contains(query.requestId) } : {}),
       ...(query.from || query.to
         ? {
             createdAt: {
@@ -148,6 +153,13 @@ export class AuditService {
     ]);
 
     return toPaginatedResult(items, page, limit, total);
+  }
+
+  private contains(value: string): Prisma.StringFilter {
+    return {
+      contains: value,
+      mode: 'insensitive',
+    };
   }
 
   private computeHash(input: {

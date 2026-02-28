@@ -28,7 +28,7 @@ type TextEditor = {
 
 const GRID = 120;
 const SAVE_MS = 900;
-const ZOOM_MIN = 0.2;
+const ZOOM_MIN = 0.1;
 const ZOOM_MAX = 2.4;
 const IMAGE_MAX_EDGE = 1600;
 const IMAGE_JPEG_QUALITY = 0.82;
@@ -525,6 +525,9 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
     }
 
     if (tool === "pan" || e.button === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
       dragRef.current = {
         mode: "pan",
         sx: e.clientX,
@@ -617,6 +620,7 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
     const p = world(e.clientX, e.clientY);
 
     if (st.mode === "pan") {
+      e.preventDefault();
       setDocSafe((prev) => ({
         ...prev,
         viewport: {
@@ -715,8 +719,11 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
     }
   };
 
-  const onUp: React.PointerEventHandler<HTMLCanvasElement> = () => {
+  const onUp: React.PointerEventHandler<HTMLCanvasElement> = (e) => {
     if (!dragRef.current) return;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     dragRef.current = null;
     saveSoon(docRef.current);
   };
@@ -751,30 +758,49 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
     setTextEditor(null);
   };
 
-  const onWheel: React.WheelEventHandler<HTMLCanvasElement> = (e) => {
-    e.preventDefault();
-    const c = canvasRef.current;
-    if (!c) return;
-    const r = c.getBoundingClientRect();
-    const cx = e.clientX - r.left;
-    const cy = e.clientY - r.top;
-    setDocSafe((prev) => {
-      const z = clamp(
-        prev.viewport.zoom * (e.deltaY < 0 ? 1.08 : 0.92),
-        ZOOM_MIN,
-        ZOOM_MAX,
-      );
-      const k = z / prev.viewport.zoom;
-      return {
-        ...prev,
-        viewport: {
-          x: cx - (cx - prev.viewport.x) * k,
-          y: cy - (cy - prev.viewport.y) * k,
-          zoom: z,
-        },
-      };
-    });
-  };
+  const zoomAt = useCallback(
+    (clientX: number, clientY: number, deltaY: number) => {
+      const c = canvasRef.current;
+      if (!c) return;
+      const r = c.getBoundingClientRect();
+      const cx = clientX - r.left;
+      const cy = clientY - r.top;
+      setDocSafe((prev) => {
+        const z = clamp(
+          prev.viewport.zoom * (deltaY < 0 ? 1.08 : 0.92),
+          ZOOM_MIN,
+          ZOOM_MAX,
+        );
+        const k = z / prev.viewport.zoom;
+        return {
+          ...prev,
+          viewport: {
+            x: cx - (cx - prev.viewport.x) * k,
+            y: cy - (cy - prev.viewport.y) * k,
+            zoom: z,
+          },
+        };
+      });
+    },
+    [setDocSafe],
+  );
+
+  useEffect(() => {
+    if (!open || loading) return;
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    const blockPageScroll = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      zoomAt(event.clientX, event.clientY, event.deltaY);
+    };
+
+    shell.addEventListener("wheel", blockPageScroll, { passive: false });
+    return () => {
+      shell.removeEventListener("wheel", blockPageScroll);
+    };
+  }, [loading, open, zoomAt]);
 
   const uploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -944,7 +970,6 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
                 onPointerUp={onUp}
                 onPointerLeave={onUp}
                 onDoubleClick={onDouble}
-                onWheel={onWheel}
               />
 
               <aside className="task-roadmap-minimap">

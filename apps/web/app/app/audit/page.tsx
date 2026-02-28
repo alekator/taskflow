@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../src/components/auth/auth-provider";
 import { listAuditLogs, type AuditLog } from "../../../src/lib/audit/api";
 import { getErrorDetails } from "../../../src/lib/errors";
+
+function toIsoDateStart(value: string) {
+  if (!value) return undefined;
+  return new Date(`${value}T00:00:00`).toISOString();
+}
+
+function toIsoDateEnd(value: string) {
+  if (!value) return undefined;
+  return new Date(`${value}T23:59:59.999`).toISOString();
+}
+
+function shortValue(value: string | null, size = 10) {
+  if (!value) return "n/a";
+  if (value.length <= size * 2) return value;
+  return `${value.slice(0, size)}...${value.slice(-size)}`;
+}
 
 export default function AuditPage() {
   const { user, isReady } = useAuth();
@@ -14,23 +30,74 @@ export default function AuditPage() {
   const [items, setItems] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [applyPulse, setApplyPulse] = useState(false);
+  const applyPulseTimeoutRef = useRef<number | null>(null);
 
   const [action, setAction] = useState("");
   const [requestId, setRequestId] = useState("");
   const [entityType, setEntityType] = useState("");
+  const [entityId, setEntityId] = useState("");
+  const [actorUserId, setActorUserId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const [submittedAction, setSubmittedAction] = useState("");
+  const [submittedRequestId, setSubmittedRequestId] = useState("");
+  const [submittedEntityType, setSubmittedEntityType] = useState("");
+  const [submittedEntityId, setSubmittedEntityId] = useState("");
+  const [submittedActorUserId, setSubmittedActorUserId] = useState("");
+  const [submittedFrom, setSubmittedFrom] = useState("");
+  const [submittedTo, setSubmittedTo] = useState("");
+
+  const activeFilterCount = useMemo(
+    () =>
+      [
+        submittedAction,
+        submittedRequestId,
+        submittedEntityType,
+        submittedEntityId,
+        submittedActorUserId,
+        submittedFrom,
+        submittedTo,
+      ].filter((value) => value.trim().length > 0).length,
+    [
+      submittedAction,
+      submittedActorUserId,
+      submittedEntityId,
+      submittedEntityType,
+      submittedFrom,
+      submittedRequestId,
+      submittedTo,
+    ],
+  );
 
   const query = useMemo(
     () => ({
       page,
       limit,
-      action: action.trim() || undefined,
-      requestId: requestId.trim() || undefined,
-      entityType: entityType.trim() || undefined,
+      action: submittedAction.trim() || undefined,
+      requestId: submittedRequestId.trim() || undefined,
+      entityType: submittedEntityType.trim() || undefined,
+      entityId: submittedEntityId.trim() || undefined,
+      actorUserId: submittedActorUserId.trim() || undefined,
+      from: toIsoDateStart(submittedFrom),
+      to: toIsoDateEnd(submittedTo),
     }),
-    [action, entityType, limit, page, requestId],
+    [
+      limit,
+      page,
+      submittedAction,
+      submittedActorUserId,
+      submittedEntityId,
+      submittedEntityType,
+      submittedFrom,
+      submittedRequestId,
+      submittedTo,
+    ],
   );
 
   useEffect(() => {
@@ -50,6 +117,7 @@ export default function AuditPage() {
       try {
         const res = await listAuditLogs(query);
         setItems(res.items);
+        setTotal(res.meta.total);
         setTotalPages(res.meta.totalPages);
       } catch (err) {
         const details = getErrorDetails(err);
@@ -62,21 +130,71 @@ export default function AuditPage() {
     void run();
   }, [canViewWorkspaceActivity, query]);
 
+  useEffect(() => {
+    return () => {
+      if (applyPulseTimeoutRef.current !== null) {
+        window.clearTimeout(applyPulseTimeoutRef.current);
+      }
+    };
+  }, []);
+
   if (!isReady || !canViewWorkspaceActivity) {
     return null;
   }
+
+  const resetFilters = () => {
+    setPage(1);
+    setAction("");
+    setEntityType("");
+    setRequestId("");
+    setEntityId("");
+    setActorUserId("");
+    setFrom("");
+    setTo("");
+    setSubmittedAction("");
+    setSubmittedEntityType("");
+    setSubmittedRequestId("");
+    setSubmittedEntityId("");
+    setSubmittedActorUserId("");
+    setSubmittedFrom("");
+    setSubmittedTo("");
+  };
+
+  const onApply = () => {
+    setPage(1);
+    setSubmittedAction(action.trim());
+    setSubmittedEntityType(entityType.trim());
+    setSubmittedRequestId(requestId.trim());
+    setSubmittedEntityId(entityId.trim());
+    setSubmittedActorUserId(actorUserId.trim());
+    setSubmittedFrom(from);
+    setSubmittedTo(to);
+    setApplyPulse(true);
+
+    if (applyPulseTimeoutRef.current !== null) {
+      window.clearTimeout(applyPulseTimeoutRef.current);
+    }
+
+    applyPulseTimeoutRef.current = window.setTimeout(() => {
+      setApplyPulse(false);
+      applyPulseTimeoutRef.current = null;
+    }, 320);
+  };
 
   return (
     <div className="stack">
       <header className="panel-header">
         <h1>Workspace Activity</h1>
-        <p>Administrative event history with request IDs, entity traces, and hash chain metadata.</p>
+        <p>
+          Administrative event history with request IDs, entity traces, and
+          hash chain metadata.
+        </p>
       </header>
 
       <section className="columns-3">
         <article className="stat-card">
-          <strong>{items.length}</strong>
-          <p className="soft">Visible events</p>
+          <strong>{total}</strong>
+          <p className="soft">Matched events</p>
         </article>
         <article className="stat-card">
           <strong>{page}</strong>
@@ -88,55 +206,106 @@ export default function AuditPage() {
         </article>
       </section>
 
-      <section className="item-card board-filters">
-        <div className="panel-header panel-header-inline">
-          <h2>Filters</h2>
-          <button
-            className="button button-ghost button-compact"
-            type="button"
-            onClick={() => {
-              setPage(1);
-              setAction("");
-              setEntityType("");
-              setRequestId("");
-            }}
-          >
-            Reset
-          </button>
+      <section className="item-card board-filters board-filters-toolbar-thin workspace-audit-filters">
+        <div className="workspace-audit-filters-top">
+          <div className="workspace-tasks-filters-title">
+            <span className="meta">Filters</span>
+            <span className="badge badge-neutral">Audit</span>
+            <span className="badge badge-ok">
+              {activeFilterCount === 0
+                ? "All events"
+                : `Active ${activeFilterCount}`}
+            </span>
+          </div>
+
+          <div className="workspace-tasks-filters-actions">
+            <button
+              className={`button button-primary button-compact${applyPulse ? " button-pulse" : ""}`}
+              data-testid="audit-filter-apply"
+              type="button"
+              onClick={onApply}
+            >
+              Apply
+            </button>
+            <button
+              className="button button-ghost button-compact"
+              data-testid="audit-filter-reset"
+              type="button"
+              onClick={resetFilters}
+            >
+              Reset
+            </button>
+          </div>
         </div>
 
-        <div className="columns-auto">
-          <label>
-            Action
+        <div className="workspace-audit-filters-grid">
+          <label className="board-filter-inline-label workspace-audit-filter-field workspace-audit-filter-wide">
+            <span>Action</span>
             <input
+              data-testid="audit-filter-action"
               placeholder="TASK_DELETE"
               value={action}
-              onChange={(e) => {
-                setPage(1);
-                setAction(e.target.value);
-              }}
+              onChange={(e) => setAction(e.target.value)}
             />
           </label>
-          <label>
-            Entity type
+
+          <label className="board-filter-inline-label workspace-audit-filter-field">
+            <span>Entity type</span>
             <input
-              placeholder="task or project"
+              data-testid="audit-filter-entity-type"
+              placeholder="task, project, user"
               value={entityType}
-              onChange={(e) => {
-                setPage(1);
-                setEntityType(e.target.value);
-              }}
+              onChange={(e) => setEntityType(e.target.value)}
             />
           </label>
-          <label>
-            Request ID
+
+          <label className="board-filter-inline-label workspace-audit-filter-field workspace-audit-filter-wide">
+            <span>Request ID</span>
             <input
+              data-testid="audit-filter-request-id"
               placeholder="Request correlation id"
               value={requestId}
-              onChange={(e) => {
-                setPage(1);
-                setRequestId(e.target.value);
-              }}
+              onChange={(e) => setRequestId(e.target.value)}
+            />
+          </label>
+
+          <label className="board-filter-inline-label workspace-audit-filter-field">
+            <span>Entity ID</span>
+            <input
+              data-testid="audit-filter-entity-id"
+              placeholder="Specific entity id"
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+            />
+          </label>
+
+          <label className="board-filter-inline-label workspace-audit-filter-field">
+            <span>Actor user</span>
+            <input
+              data-testid="audit-filter-actor-user"
+              placeholder="Actor user id"
+              value={actorUserId}
+              onChange={(e) => setActorUserId(e.target.value)}
+            />
+          </label>
+
+          <label className="board-filter-inline-label workspace-audit-filter-field">
+            <span>From date</span>
+            <input
+              data-testid="audit-filter-from"
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+
+          <label className="board-filter-inline-label workspace-audit-filter-field">
+            <span>To date</span>
+            <input
+              data-testid="audit-filter-to"
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
             />
           </label>
         </div>
@@ -164,21 +333,51 @@ export default function AuditPage() {
 
           <ul className="activity-feed">
             {items.map((log) => (
-              <li key={log.id} className="activity-item">
+              <li
+                key={log.id}
+                className="activity-item audit-timeline-item"
+                data-testid="audit-event-item"
+              >
                 <div className="activity-dot activity-dot-muted" />
                 <div className="activity-copy">
                   <div className="audit-row">
-                    <strong>{log.action}</strong>
-                    <span className="meta">{new Date(log.createdAt).toLocaleString()}</span>
+                    <div className="audit-row-main">
+                      <strong className="audit-action">{log.action}</strong>
+                      <div className="audit-chip-row">
+                        <span className="badge badge-neutral">
+                          {log.entityType || "system"}
+                        </span>
+                        {log.projectId ? (
+                          <span className="badge badge-ok">
+                            project {shortValue(log.projectId, 6)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="meta audit-time">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </span>
                   </div>
-                  <p className="soft">
-                    entity: {log.entityType || "n/a"} - {log.entityId || "n/a"}
-                  </p>
-                  <p className="soft">
-                    actor: {log.actorUserId || "n/a"} - request: {log.requestId || "n/a"}
-                  </p>
-                  <p className="meta">
-                    hash: {(log.hash || "n/a").slice(0, 16)}... - prev: {(log.prevHash || "n/a").slice(0, 16)}...
+                  <div className="audit-meta-grid">
+                    <div className="audit-meta-card">
+                      <span className="audit-meta-label">Entity</span>
+                      <strong>{shortValue(log.entityId, 8)}</strong>
+                    </div>
+                    <div className="audit-meta-card">
+                      <span className="audit-meta-label">Actor</span>
+                      <strong>{shortValue(log.actorUserId, 8)}</strong>
+                    </div>
+                    <div className="audit-meta-card">
+                      <span className="audit-meta-label">Request</span>
+                      <strong>{shortValue(log.requestId, 8)}</strong>
+                    </div>
+                    <div className="audit-meta-card">
+                      <span className="audit-meta-label">Chain</span>
+                      <strong>{shortValue(log.hash, 6)}</strong>
+                    </div>
+                  </div>
+                  <p className="meta audit-chain-row">
+                    prev {shortValue(log.prevHash, 6)}
                   </p>
                 </div>
               </li>

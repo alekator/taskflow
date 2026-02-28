@@ -183,6 +183,39 @@ describe('Audit Logs (e2e)', () => {
     }
   });
 
+  it('supports partial matching for action, entity type, and actor filters', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    await createProject(adminLogin.accessToken, 'Partial Audit Project');
+
+    const res = await listAuditLogs(adminLogin.accessToken, {
+      action: 'project_',
+      entityType: 'proj',
+      actorUserId: adminLogin.user.id.slice(0, 8),
+      page: 1,
+      limit: 20,
+    }).expect(200);
+
+    const body = res.body as {
+      items: Array<{
+        action: string;
+        entityType: string | null;
+        actorUserId: string | null;
+      }>;
+      meta: { total: number };
+    };
+
+    expect(body.meta.total).toBeGreaterThanOrEqual(1);
+    expect(
+      body.items.every((item) => item.action.includes('PROJECT_')),
+    ).toBe(true);
+    expect(
+      body.items.every((item) => item.entityType === 'project'),
+    ).toBe(true);
+    expect(
+      body.items.every((item) => item.actorUserId === adminLogin.user.id),
+    ).toBe(true);
+  });
+
   it('non-admin cannot list audit logs', async () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
     await createProject(adminLogin.accessToken, 'Audit Forbidden');
