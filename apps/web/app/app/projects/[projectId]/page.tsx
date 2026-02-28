@@ -187,10 +187,16 @@ export default function ProjectDetailsPage() {
   const [taskCreatePending, setTaskCreatePending] = useState(false);
   const [taskActionId, setTaskActionId] = useState<string | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [taskSearchInput, setTaskSearchInput] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
+  const [taskStatusInput, setTaskStatusInput] = useState<"ALL" | TaskStatus>("ALL");
   const [taskStatusFilter, setTaskStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
+  const [taskPriorityInput, setTaskPriorityInput] = useState<"ALL" | TaskPriority>("ALL");
   const [taskPriorityFilter, setTaskPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
+  const [taskAssigneeInput, setTaskAssigneeInput] = useState<"ALL" | string>("ALL");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>("ALL");
+  const [taskVersionInput, setTaskVersionInput] = useState<"ALL" | string>("ALL");
+  const [taskVersionFilter, setTaskVersionFilter] = useState<"ALL" | string>("ALL");
   const [dragState, setDragState] = useState<DragState>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
   const [taskCardPointerState, setTaskCardPointerState] =
@@ -219,10 +225,18 @@ export default function ProjectDetailsPage() {
         taskPriorityFilter === "ALL" || task.priority === taskPriorityFilter;
       const matchesAssignee =
         taskAssigneeFilter === "ALL" || task.assigneeId === taskAssigneeFilter;
+      const matchesVersion =
+        taskVersionFilter === "ALL" || String(task.version) === taskVersionFilter;
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
+      return matchesSearch && matchesStatus && matchesPriority && matchesAssignee && matchesVersion;
     });
-  }, [taskAssigneeFilter, taskPriorityFilter, taskSearch, taskStatusFilter, tasks]);
+  }, [taskAssigneeFilter, taskPriorityFilter, taskSearch, taskStatusFilter, taskVersionFilter, tasks]);
+
+  const availableTaskVersions = useMemo(() => {
+    return Array.from(new Set(tasks.map((task) => String(task.version)))).sort(
+      (left, right) => Number(right) - Number(left),
+    );
+  }, [tasks]);
 
   const groupedTasks = useMemo(() => {
     const groups: Record<TaskStatus, Task[]> = {
@@ -674,21 +688,26 @@ export default function ProjectDetailsPage() {
             </div>
           </section>
 
-          <section className="item-card board-filters-card board-filters-toolbar board-filters-toolbar-thin">
-            <div className="board-filters-inline">
-              <strong>Filters</strong>
+          <section className="item-card board-filters board-filters-card board-filters-toolbar board-filters-toolbar-thin workspace-tasks-filters">
+            <div className="workspace-tasks-filters-row">
+              <div className="workspace-tasks-filters-title">
+                <span className="meta">Filters</span>
+                <span className="badge badge-neutral">Board</span>
+                <span className="badge badge-ok">Visible {filteredTasks.length}</span>
+              </div>
+
               <label className="board-filter-search board-filter-inline-label">
                 <span>Search</span>
                 <input
-                  value={taskSearch}
-                  onChange={(e) => setTaskSearch(e.target.value)}
+                  value={taskSearchInput}
+                  onChange={(e) => setTaskSearchInput(e.target.value)}
                   placeholder="Search by task title or description"
                 />
               </label>
 
               <label className="board-filter-inline-label">
                 <span>Status</span>
-                <select value={taskStatusFilter} onChange={(e) => setTaskStatusFilter(e.target.value as "ALL" | TaskStatus)}>
+                <select value={taskStatusInput} onChange={(e) => setTaskStatusInput(e.target.value as "ALL" | TaskStatus)}>
                   <option value="ALL">All statuses</option>
                   {taskStatuses.map((status) => (
                     <option key={status} value={status}>
@@ -700,7 +719,7 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Priority</span>
-                <select value={taskPriorityFilter} onChange={(e) => setTaskPriorityFilter(e.target.value as "ALL" | TaskPriority)}>
+                <select value={taskPriorityInput} onChange={(e) => setTaskPriorityInput(e.target.value as "ALL" | TaskPriority)}>
                   <option value="ALL">All priorities</option>
                   {taskPriorities.map((priority) => (
                     <option key={priority} value={priority}>
@@ -712,7 +731,7 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Assignee</span>
-                <select value={taskAssigneeFilter} onChange={(e) => setTaskAssigneeFilter(e.target.value)}>
+                <select value={taskAssigneeInput} onChange={(e) => setTaskAssigneeInput(e.target.value)}>
                   <option value="ALL">All assignees</option>
                   {members.map((member) => (
                     <option key={member.userId} value={member.userId}>
@@ -722,18 +741,51 @@ export default function ProjectDetailsPage() {
                 </select>
               </label>
 
-              <button
-                className="button button-ghost button-compact"
-                type="button"
-                onClick={() => {
-                  setTaskSearch("");
-                  setTaskStatusFilter("ALL");
-                  setTaskPriorityFilter("ALL");
-                  setTaskAssigneeFilter("ALL");
-                }}
-              >
-                Reset
-              </button>
+              <label className="board-filter-inline-label">
+                <span>Version</span>
+                <select value={taskVersionInput} onChange={(e) => setTaskVersionInput(e.target.value)}>
+                  <option value="ALL">All versions</option>
+                  {availableTaskVersions.map((version) => (
+                    <option key={version} value={version}>
+                      v{version}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="workspace-tasks-filters-actions">
+                <button
+                  className="button button-primary button-compact"
+                  type="button"
+                  onClick={() => {
+                    setTaskSearch(taskSearchInput);
+                    setTaskStatusFilter(taskStatusInput);
+                    setTaskPriorityFilter(taskPriorityInput);
+                    setTaskAssigneeFilter(taskAssigneeInput);
+                    setTaskVersionFilter(taskVersionInput);
+                  }}
+                >
+                  Apply
+                </button>
+                <button
+                  className="button button-ghost button-compact"
+                  type="button"
+                  onClick={() => {
+                    setTaskSearchInput("");
+                    setTaskSearch("");
+                    setTaskStatusInput("ALL");
+                    setTaskStatusFilter("ALL");
+                    setTaskPriorityInput("ALL");
+                    setTaskPriorityFilter("ALL");
+                    setTaskAssigneeInput("ALL");
+                    setTaskAssigneeFilter("ALL");
+                    setTaskVersionInput("ALL");
+                    setTaskVersionFilter("ALL");
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
             </div>
           </section>
 

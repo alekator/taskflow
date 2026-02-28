@@ -151,10 +151,17 @@ export default function AppHomePage() {
       </section>
 
       <section className="overview-grid">
-        <article className="item-card">
+        <article className="item-card telemetry-card">
           <div className="panel-header panel-header-inline overview-card-header">
             <h2>Runtime telemetry</h2>
             <span className="badge badge-ok">{health?.status ?? "n/a"}</span>
+          </div>
+          <div className="overview-telemetry-intro">
+            <h3>Operational Readout</h3>
+            <p className="soft">
+              Live health signals across runtime, memory pressure, database responsiveness,
+              and realtime service availability.
+            </p>
           </div>
           <ul className="list telemetry-list">
             <li className="readiness-row readiness-row-telemetry">
