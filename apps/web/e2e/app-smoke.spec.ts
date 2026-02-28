@@ -106,3 +106,37 @@ test("notifications drawer opens and routes to related task", async ({ page }) =
   await expect(page).toHaveURL(/\/app\/tasks\/.+/);
   await expect(page.getByRole("heading", { name: taskName })).toBeVisible();
 });
+
+test("task details quick actions persist status changes", async ({ page }) => {
+  const unique = Date.now().toString();
+  const projectName = `detail-project-${unique}`;
+  const taskName = `detail-task-${unique}`;
+
+  await login(page);
+  await page.goto("/app/projects");
+
+  await page.getByTestId("project-name-input").fill(projectName);
+  await page.getByTestId("project-description-input").fill("Task detail project");
+  await page.getByTestId("project-create-submit").click();
+
+  const projectRow = page.getByTestId("project-item").filter({ hasText: projectName }).first();
+  await expect(projectRow).toBeVisible();
+  await projectRow.getByRole("link", { name: "Open board" }).click();
+
+  await page.getByTestId("task-create-open").click();
+  await page.getByTestId("task-title-input").fill(taskName);
+  await page.getByTestId("task-description-input").fill("Task detail flow");
+  await page.getByTestId("task-create-submit").click();
+
+  const taskCard = page.getByTestId(/task-card-/).filter({ hasText: taskName }).first();
+  await expect(taskCard).toBeVisible();
+  await taskCard.click();
+
+  await expect(page).toHaveURL(/\/app\/tasks\/.+/);
+  await expect(page.getByRole("heading", { name: taskName })).toBeVisible();
+
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+
+  await expect(page.locator(".toolbar").getByText("done")).toBeVisible();
+});

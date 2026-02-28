@@ -217,6 +217,7 @@ describe('Users workspace (e2e)', () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
     const res = await request(server)
       .get(api('/users'))
+      .query({ search: creds.user.email })
       .set('Authorization', `Bearer ${adminLogin.accessToken}`)
       .expect(200);
 
