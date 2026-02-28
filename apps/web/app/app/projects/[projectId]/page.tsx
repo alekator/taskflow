@@ -9,6 +9,7 @@ import { listAuditLogs, type AuditLog } from "../../../../src/lib/audit/api";
 import { getErrorDetails } from "../../../../src/lib/errors";
 import {
   addProjectMember,
+  deleteProject,
   getProject,
   listProjectMembers,
   removeProjectMember,
@@ -182,6 +183,8 @@ export default function ProjectDetailsPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [projectDeleteConfirmOpen, setProjectDeleteConfirmOpen] = useState(false);
+  const [projectDeleting, setProjectDeleting] = useState(false);
 
   const [newUserId, setNewUserId] = useState("");
   const [newRole, setNewRole] = useState<ProjectRole>("MEMBER");
@@ -654,6 +657,24 @@ export default function ProjectDetailsPage() {
     }
   };
 
+  const onDeleteProject = async () => {
+    if (!project || projectDeleting) return;
+
+    setProjectDeleting(true);
+
+    try {
+      await deleteProject(project.id, project.version);
+      notify("success", "Project deleted");
+      router.push("/app/projects");
+    } catch (err) {
+      const details = getErrorDetails(err);
+      setError(details.message);
+      notify("error", details.message);
+      setProjectDeleting(false);
+      setProjectDeleteConfirmOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="stack">
@@ -666,6 +687,52 @@ export default function ProjectDetailsPage() {
 
   return (
     <div className="stack workspace-stack-tight">
+      {user?.role === "ADMIN" && project ? (
+        <div className="workspace-danger-action">
+          <button
+            type="button"
+            className="workspace-danger-button"
+            onClick={() => setProjectDeleteConfirmOpen(true)}
+          >
+            Delete this project
+          </button>
+        </div>
+      ) : null}
+      {projectDeleteConfirmOpen && project ? (
+        <div
+          className="workspace-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="project-delete-title"
+        >
+          <div className="workspace-confirm-card">
+            <p className="workspace-confirm-eyebrow">Administrative action</p>
+            <h2 id="project-delete-title">Delete this project?</h2>
+            <p>
+              This will permanently remove the selected project and every task
+              inside it. This action cannot be undone.
+            </p>
+            <div className="workspace-confirm-actions">
+              <button
+                type="button"
+                className="workspace-confirm-cancel"
+                onClick={() => setProjectDeleteConfirmOpen(false)}
+                disabled={projectDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="workspace-confirm-submit"
+                onClick={() => void onDeleteProject()}
+                disabled={projectDeleting}
+              >
+                {projectDeleting ? "Deleting..." : "Delete project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="project-header">
         <div className="project-header-main">
           <div className="project-breadcrumbs">

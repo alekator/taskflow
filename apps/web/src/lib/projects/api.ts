@@ -50,6 +50,18 @@ export async function getProject(projectId: string): Promise<Project> {
   return authFetch<Project>(`/projects/${projectId}`);
 }
 
+export async function deleteProject(
+  projectId: string,
+  version: number,
+): Promise<{ ok: boolean }> {
+  return authFetch<{ ok: boolean }>(`/projects/${projectId}`, {
+    method: "DELETE",
+    headers: {
+      "If-Match": String(version),
+    },
+  });
+}
+
 export async function listProjectMembers(
   projectId: string,
   params?: {

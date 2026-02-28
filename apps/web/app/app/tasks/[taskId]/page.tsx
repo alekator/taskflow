@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useAuth } from "../../../../src/components/auth/auth-provider";
+import { useToast } from "../../../../src/components/feedback/toast-provider";
 import { TaskRoadmapPanel } from "../../../../src/components/tasks/task-roadmap-panel";
 import { getErrorDetails } from "../../../../src/lib/errors";
 import {
@@ -11,6 +13,7 @@ import {
 } from "../../../../src/lib/projects/api";
 import {
   assignProjectTask,
+  deleteProjectTask,
   getWorkspaceTask,
   unassignProjectTask,
   updateProjectTask,
@@ -24,6 +27,9 @@ function formatStatus(status: WorkspaceTask["status"]) {
 }
 
 export default function TaskDetailsPage() {
+  const { user } = useAuth();
+  const { notify } = useToast();
+  const router = useRouter();
   const params = useParams<{ taskId: string }>();
   const taskId = params.taskId;
 
@@ -33,6 +39,8 @@ export default function TaskDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [taskDeleteConfirmOpen, setTaskDeleteConfirmOpen] = useState(false);
+  const [taskDeleting, setTaskDeleting] = useState(false);
   const [statusValue, setStatusValue] = useState<TaskStatus>("TODO");
   const [priorityValue, setPriorityValue] = useState<TaskPriority>("MEDIUM");
   const [assigneeIdValue, setAssigneeIdValue] = useState("");
@@ -123,6 +131,25 @@ export default function TaskDetailsPage() {
     }
   };
 
+  const onDeleteTask = async () => {
+    if (!task || taskDeleting) return;
+
+    setTaskDeleting(true);
+    setUpdateError(null);
+
+    try {
+      await deleteProjectTask(task.project.id, task.id, task.version);
+      notify("success", "Task deleted");
+      router.push("/app/projects");
+    } catch (err) {
+      const details = getErrorDetails(err);
+      setUpdateError(details.message);
+      notify("error", details.message);
+      setTaskDeleting(false);
+      setTaskDeleteConfirmOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="stack">
@@ -138,6 +165,52 @@ export default function TaskDetailsPage() {
 
   return (
     <div className="stack">
+      {user?.role === "ADMIN" ? (
+        <div className="workspace-danger-action">
+          <button
+            type="button"
+            className="workspace-danger-button"
+            onClick={() => setTaskDeleteConfirmOpen(true)}
+          >
+            Delete this task
+          </button>
+        </div>
+      ) : null}
+      {taskDeleteConfirmOpen ? (
+        <div
+          className="workspace-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-delete-title"
+        >
+          <div className="workspace-confirm-card">
+            <p className="workspace-confirm-eyebrow">Administrative action</p>
+            <h2 id="task-delete-title">Delete this task?</h2>
+            <p>
+              This will permanently remove the selected task from its project.
+              This action cannot be undone.
+            </p>
+            <div className="workspace-confirm-actions">
+              <button
+                type="button"
+                className="workspace-confirm-cancel"
+                onClick={() => setTaskDeleteConfirmOpen(false)}
+                disabled={taskDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="workspace-confirm-submit"
+                onClick={() => void onDeleteTask()}
+                disabled={taskDeleting}
+              >
+                {taskDeleting ? "Deleting..." : "Delete task"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <header className="panel-header">
         <p className="meta">
           <Link href="/app/tasks" className="workspace-row-action">
