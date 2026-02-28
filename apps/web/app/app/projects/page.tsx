@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useToast } from "../../../src/components/feedback/toast-provider";
+import { getErrorDetails } from "../../../src/lib/errors";
 import {
   createProject,
   listProjects,
   type Project,
 } from "../../../src/lib/projects/api";
-import { useToast } from "../../../src/components/feedback/toast-provider";
-import { getErrorDetails } from "../../../src/lib/errors";
 
 export default function ProjectsPage() {
   const { notify } = useToast();
@@ -117,7 +117,7 @@ export default function ProjectsPage() {
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   minLength={1}
-                  maxLength={100}
+                  maxLength={32}
                   placeholder="Website relaunch"
                   required
                 />
@@ -129,7 +129,7 @@ export default function ProjectsPage() {
                   value={createDescription}
                   onChange={(e) => setCreateDescription(e.target.value)}
                   placeholder="Scope, team, or current objective"
-                  maxLength={1000}
+                  maxLength={1400}
                   rows={4}
                 />
               </label>
@@ -150,7 +150,9 @@ export default function ProjectsPage() {
             <div>
               <h2>Project index</h2>
               <p className="soft">
-                {loading ? "Loading projects..." : `${items.length} shown on this page`}
+                {loading
+                  ? "Loading projects..."
+                  : `${items.length} shown on this page`}
               </p>
             </div>
 
@@ -263,4 +265,3 @@ export default function ProjectsPage() {
     </div>
   );
 }
-

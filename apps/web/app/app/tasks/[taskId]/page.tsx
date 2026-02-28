@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { TaskRoadmapPanel } from "../../../../src/components/tasks/task-roadmap-panel";
+import { getErrorDetails } from "../../../../src/lib/errors";
+import {
+  listProjectMembers,
+  type ProjectMember,
+} from "../../../../src/lib/projects/api";
 import {
   assignProjectTask,
   getWorkspaceTask,
@@ -12,12 +18,6 @@ import {
   type TaskStatus,
   type WorkspaceTask,
 } from "../../../../src/lib/tasks/api";
-import {
-  listProjectMembers,
-  type ProjectMember,
-} from "../../../../src/lib/projects/api";
-import { getErrorDetails } from "../../../../src/lib/errors";
-import { TaskRoadmapPanel } from "../../../../src/components/tasks/task-roadmap-panel";
 
 function formatStatus(status: WorkspaceTask["status"]) {
   return status === "IN_PROGRESS" ? "In progress" : status.toLowerCase();
@@ -148,7 +148,10 @@ export default function TaskDetailsPage() {
         <h1>{task.title}</h1>
         <p>
           Project:{" "}
-          <Link href={`/app/projects/${task.project.id}`} className="workspace-row-action">
+          <Link
+            href={`/app/projects/${task.project.id}`}
+            className="workspace-row-action"
+          >
             {task.project.name}
           </Link>
         </p>
@@ -156,7 +159,9 @@ export default function TaskDetailsPage() {
 
       <section className="item-card">
         <div className="toolbar">
-          <span className="badge badge-neutral">{formatStatus(task.status)}</span>
+          <span className="badge badge-neutral">
+            {formatStatus(task.status)}
+          </span>
           <span className="badge badge-neutral">{task.priority}</span>
           <span className="meta">Version: v{task.version}</span>
         </div>
@@ -170,22 +175,26 @@ export default function TaskDetailsPage() {
             <div className="task-quick-actions-card">
               <div className="task-quick-actions-head">
                 <h2>Quick actions</h2>
-                <p className="meta">Update task state directly from this page.</p>
+                <p className="meta">
+                  Update task state directly from this page.
+                </p>
               </div>
 
               <div className="task-quick-actions-section">
                 <span className="task-quick-actions-label">Status</span>
                 <div className="task-status-pills">
-                  {(["TODO", "IN_PROGRESS", "TESTING", "DONE"] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      className={`button button-compact task-status-btn ${statusValue === status ? "task-status-btn-active" : ""}`}
-                      onClick={() => setStatusValue(status)}
-                    >
-                      {formatStatus(status)}
-                    </button>
-                  ))}
+                  {(["TODO", "IN_PROGRESS", "TESTING", "DONE"] as const).map(
+                    (status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={`button button-compact task-status-btn ${statusValue === status ? "task-status-btn-active" : ""}`}
+                        onClick={() => setStatusValue(status)}
+                      >
+                        {formatStatus(status)}
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
 
@@ -194,7 +203,9 @@ export default function TaskDetailsPage() {
                   <span className="task-quick-actions-label">Priority</span>
                   <select
                     value={priorityValue}
-                    onChange={(event) => setPriorityValue(event.target.value as TaskPriority)}
+                    onChange={(event) =>
+                      setPriorityValue(event.target.value as TaskPriority)
+                    }
                   >
                     <option value="LOW">LOW</option>
                     <option value="MEDIUM">MEDIUM</option>

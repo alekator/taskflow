@@ -4,11 +4,11 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   @MinLength(1)
-  @MaxLength(100)
+  @MaxLength(32)
   name?: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(1000)
+  @MaxLength(1400)
   description?: string;
 }

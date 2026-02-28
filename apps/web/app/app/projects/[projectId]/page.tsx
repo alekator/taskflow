@@ -1,8 +1,12 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../../../src/components/auth/auth-provider";
+import { useToast } from "../../../../src/components/feedback/toast-provider";
+import { listAuditLogs, type AuditLog } from "../../../../src/lib/audit/api";
+import { getErrorDetails } from "../../../../src/lib/errors";
 import {
   addProjectMember,
   getProject,
@@ -12,6 +16,7 @@ import {
   type ProjectMember,
   type ProjectRole,
 } from "../../../../src/lib/projects/api";
+import { useProjectRealtime } from "../../../../src/lib/realtime/use-project-realtime";
 import {
   createProjectTask,
   listProjectTasks,
@@ -20,11 +25,6 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "../../../../src/lib/tasks/api";
-import { listAuditLogs, type AuditLog } from "../../../../src/lib/audit/api";
-import { useProjectRealtime } from "../../../../src/lib/realtime/use-project-realtime";
-import { useToast } from "../../../../src/components/feedback/toast-provider";
-import { useAuth } from "../../../../src/components/auth/auth-provider";
-import { getErrorDetails } from "../../../../src/lib/errors";
 
 const roles: ProjectRole[] = ["OWNER", "MANAGER", "MEMBER"];
 const taskStatuses: TaskStatus[] = ["TODO", "IN_PROGRESS", "TESTING", "DONE"];
@@ -112,9 +112,13 @@ function projectTaskMove(
   if (!sourceTask) return null;
 
   const sourceColumn = groupedTasks[sourceTask.status].slice();
-  const sourceWithoutTask = sourceColumn.filter((task) => task.id !== sourceTask.id);
+  const sourceWithoutTask = sourceColumn.filter(
+    (task) => task.id !== sourceTask.id,
+  );
   const targetBase =
-    sourceTask.status === targetStatus ? sourceWithoutTask : groupedTasks[targetStatus].slice();
+    sourceTask.status === targetStatus
+      ? sourceWithoutTask
+      : groupedTasks[targetStatus].slice();
   const insertIndex = Math.max(0, Math.min(targetIndex, targetBase.length));
 
   const targetWithTask = [
@@ -140,7 +144,10 @@ function projectTaskMove(
 
   const updates = [...normalizedTarget, ...normalizedSource].filter((task) => {
     const original = taskMap.get(task.id);
-    return original && (original.status !== task.status || original.order !== task.order);
+    return (
+      original &&
+      (original.status !== task.status || original.order !== task.order)
+    );
   });
 
   if (updates.length === 0) return null;
@@ -182,21 +189,38 @@ export default function ProjectDetailsPage() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>("MEDIUM");
+  const [newTaskPriority, setNewTaskPriority] =
+    useState<TaskPriority>("MEDIUM");
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
   const [taskCreatePending, setTaskCreatePending] = useState(false);
   const [taskActionId, setTaskActionId] = useState<string | null>(null);
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [taskSearchInput, setTaskSearchInput] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
-  const [taskStatusInput, setTaskStatusInput] = useState<"ALL" | TaskStatus>("ALL");
-  const [taskStatusFilter, setTaskStatusFilter] = useState<"ALL" | TaskStatus>("ALL");
-  const [taskPriorityInput, setTaskPriorityInput] = useState<"ALL" | TaskPriority>("ALL");
-  const [taskPriorityFilter, setTaskPriorityFilter] = useState<"ALL" | TaskPriority>("ALL");
-  const [taskAssigneeInput, setTaskAssigneeInput] = useState<"ALL" | string>("ALL");
-  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>("ALL");
-  const [taskVersionInput, setTaskVersionInput] = useState<"ALL" | string>("ALL");
-  const [taskVersionFilter, setTaskVersionFilter] = useState<"ALL" | string>("ALL");
+  const [taskStatusInput, setTaskStatusInput] = useState<"ALL" | TaskStatus>(
+    "ALL",
+  );
+  const [taskStatusFilter, setTaskStatusFilter] = useState<"ALL" | TaskStatus>(
+    "ALL",
+  );
+  const [taskPriorityInput, setTaskPriorityInput] = useState<
+    "ALL" | TaskPriority
+  >("ALL");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<
+    "ALL" | TaskPriority
+  >("ALL");
+  const [taskAssigneeInput, setTaskAssigneeInput] = useState<"ALL" | string>(
+    "ALL",
+  );
+  const [taskAssigneeFilter, setTaskAssigneeFilter] = useState<"ALL" | string>(
+    "ALL",
+  );
+  const [taskVersionInput, setTaskVersionInput] = useState<"ALL" | string>(
+    "ALL",
+  );
+  const [taskVersionFilter, setTaskVersionFilter] = useState<"ALL" | string>(
+    "ALL",
+  );
   const [dragState, setDragState] = useState<DragState>(null);
   const [dropIndicator, setDropIndicator] = useState<DropIndicator>(null);
   const [taskCardPointerState, setTaskCardPointerState] =
@@ -218,7 +242,9 @@ export default function ProjectDetailsPage() {
       const matchesSearch =
         taskSearch.trim().length === 0 ||
         task.title.toLowerCase().includes(taskSearch.trim().toLowerCase()) ||
-        (task.description ?? "").toLowerCase().includes(taskSearch.trim().toLowerCase());
+        (task.description ?? "")
+          .toLowerCase()
+          .includes(taskSearch.trim().toLowerCase());
       const matchesStatus =
         taskStatusFilter === "ALL" || task.status === taskStatusFilter;
       const matchesPriority =
@@ -226,11 +252,25 @@ export default function ProjectDetailsPage() {
       const matchesAssignee =
         taskAssigneeFilter === "ALL" || task.assigneeId === taskAssigneeFilter;
       const matchesVersion =
-        taskVersionFilter === "ALL" || String(task.version) === taskVersionFilter;
+        taskVersionFilter === "ALL" ||
+        String(task.version) === taskVersionFilter;
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesAssignee && matchesVersion;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPriority &&
+        matchesAssignee &&
+        matchesVersion
+      );
     });
-  }, [taskAssigneeFilter, taskPriorityFilter, taskSearch, taskStatusFilter, taskVersionFilter, tasks]);
+  }, [
+    taskAssigneeFilter,
+    taskPriorityFilter,
+    taskSearch,
+    taskStatusFilter,
+    taskVersionFilter,
+    tasks,
+  ]);
 
   const availableTaskVersions = useMemo(() => {
     return Array.from(new Set(tasks.map((task) => String(task.version)))).sort(
@@ -308,7 +348,9 @@ export default function ProjectDetailsPage() {
 
   const canViewActivity =
     user?.role === "ADMIN" || currentProjectRole === "MANAGER";
-  const availableTabs: WorkspaceTab[] = canViewActivity ? [...workspaceTabs] : ["board", "members"];
+  const availableTabs: WorkspaceTab[] = canViewActivity
+    ? [...workspaceTabs]
+    : ["board", "members"];
   const currentTab: WorkspaceTab =
     currentTabParam === "members"
       ? "members"
@@ -395,11 +437,21 @@ export default function ProjectDetailsPage() {
   useProjectRealtime(
     projectId,
     (event) => {
-      setEvents((prev) => [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(0, 12));
+      setEvents((prev) =>
+        [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(
+          0,
+          12,
+        ),
+      );
       void load();
     },
     (event) => {
-      setEvents((prev) => [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(0, 12));
+      setEvents((prev) =>
+        [{ type: event.type, timestamp: event.timestamp }, ...prev].slice(
+          0,
+          12,
+        ),
+      );
       void load();
     },
   );
@@ -471,7 +523,8 @@ export default function ProjectDetailsPage() {
     setError(null);
 
     try {
-      const order = tasks.length > 0 ? Math.max(...tasks.map((task) => task.order)) + 1 : 1;
+      const order =
+        tasks.length > 0 ? Math.max(...tasks.map((task) => task.order)) + 1 : 1;
 
       await createProjectTask(projectId, {
         title: newTaskTitle.trim(),
@@ -551,7 +604,11 @@ export default function ProjectDetailsPage() {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
 
-    if (!dropIndicator || dropIndicator.status !== status || dropIndicator.index !== index) {
+    if (
+      !dropIndicator ||
+      dropIndicator.status !== status ||
+      dropIndicator.index !== index
+    ) {
       setDropIndicator({ status, index });
     }
   };
@@ -560,7 +617,13 @@ export default function ProjectDetailsPage() {
     if (!projectId || !dragState) return;
 
     const activeDrag = dragState;
-    const projection = projectTaskMove(tasks, groupedTasks, activeDrag, status, index);
+    const projection = projectTaskMove(
+      tasks,
+      groupedTasks,
+      activeDrag,
+      status,
+      index,
+    );
     clearDragState();
 
     if (!projection) return;
@@ -611,7 +674,9 @@ export default function ProjectDetailsPage() {
             <span>{project?.name ?? "Project"}</span>
           </div>
           <h1>{project?.name ?? "Project"}</h1>
-          <p className="project-description-preview">{project?.description || "No description"}</p>
+          <p className="project-description-preview">
+            {project?.description || "No description"}
+          </p>
         </div>
 
         <div className="project-meta-grid">
@@ -621,10 +686,18 @@ export default function ProjectDetailsPage() {
               <p className="soft">Tasks</p>
             </div>
             <div className="stat-card-details">
-              <span className={`badge ${getPriorityBadgeClass("LOW")}`}>LOW {taskPriorityCounts.LOW}</span>
-              <span className={`badge ${getPriorityBadgeClass("MEDIUM")}`}>MEDIUM {taskPriorityCounts.MEDIUM}</span>
-              <span className={`badge ${getPriorityBadgeClass("HIGH")}`}>HIGH {taskPriorityCounts.HIGH}</span>
-              <span className={`badge ${getPriorityBadgeClass("URGENT")}`}>URGENT {taskPriorityCounts.URGENT}</span>
+              <span className={`badge ${getPriorityBadgeClass("LOW")}`}>
+                LOW {taskPriorityCounts.LOW}
+              </span>
+              <span className={`badge ${getPriorityBadgeClass("MEDIUM")}`}>
+                MEDIUM {taskPriorityCounts.MEDIUM}
+              </span>
+              <span className={`badge ${getPriorityBadgeClass("HIGH")}`}>
+                HIGH {taskPriorityCounts.HIGH}
+              </span>
+              <span className={`badge ${getPriorityBadgeClass("URGENT")}`}>
+                URGENT {taskPriorityCounts.URGENT}
+              </span>
             </div>
           </div>
           <div className="stat-card stat-card-compact">
@@ -644,8 +717,14 @@ export default function ProjectDetailsPage() {
               <p className="soft">Members</p>
             </div>
             <div className="stat-card-details">
-              {memberPreview.length > 0 ? memberPreview.map((item) => <span key={item}>{item}</span>) : <span>No members yet</span>}
-              {members.length > memberPreview.length ? <span>+{members.length - memberPreview.length} more</span> : null}
+              {memberPreview.length > 0 ? (
+                memberPreview.map((item) => <span key={item}>{item}</span>)
+              ) : (
+                <span>No members yet</span>
+              )}
+              {members.length > memberPreview.length ? (
+                <span>+{members.length - memberPreview.length} more</span>
+              ) : null}
             </div>
           </div>
           <button
@@ -663,10 +742,21 @@ export default function ProjectDetailsPage() {
         {availableTabs.map((tab) => {
           const active = currentTab === tab;
           const href = `/app/projects/${projectId}?tab=${tab}`;
-          const label = tab === "board" ? "Board" : tab === "members" ? "Members" : "Activity";
+          const label =
+            tab === "board"
+              ? "Board"
+              : tab === "members"
+                ? "Members"
+                : "Activity";
 
           return (
-            <Link key={tab} href={href} className={active ? "project-tab project-tab-active" : "project-tab"}>
+            <Link
+              key={tab}
+              href={href}
+              className={
+                active ? "project-tab project-tab-active" : "project-tab"
+              }
+            >
               {label}
             </Link>
           );
@@ -680,10 +770,15 @@ export default function ProjectDetailsPage() {
           <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Board</h2>
-              <p className="soft">Keep the active workflow in one place and move work between Todo, In progress, Testing, and Done.</p>
+              <p className="soft">
+                Keep the active workflow in one place and move work between
+                Todo, In progress, Testing, and Done.
+              </p>
             </div>
             <div className="board-toolbar-meta">
-              <span className="badge badge-neutral">{filteredTasks.length} visible</span>
+              <span className="badge badge-neutral">
+                {filteredTasks.length} visible
+              </span>
               <span className="meta">Project ID {projectId || "n/a"}</span>
             </div>
           </section>
@@ -693,7 +788,9 @@ export default function ProjectDetailsPage() {
               <div className="workspace-tasks-filters-title">
                 <span className="meta">Filters</span>
                 <span className="badge badge-neutral">Board</span>
-                <span className="badge badge-ok">Visible {filteredTasks.length}</span>
+                <span className="badge badge-ok">
+                  Visible {filteredTasks.length}
+                </span>
               </div>
 
               <label className="board-filter-search board-filter-inline-label">
@@ -707,7 +804,12 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Status</span>
-                <select value={taskStatusInput} onChange={(e) => setTaskStatusInput(e.target.value as "ALL" | TaskStatus)}>
+                <select
+                  value={taskStatusInput}
+                  onChange={(e) =>
+                    setTaskStatusInput(e.target.value as "ALL" | TaskStatus)
+                  }
+                >
                   <option value="ALL">All statuses</option>
                   {taskStatuses.map((status) => (
                     <option key={status} value={status}>
@@ -719,7 +821,12 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Priority</span>
-                <select value={taskPriorityInput} onChange={(e) => setTaskPriorityInput(e.target.value as "ALL" | TaskPriority)}>
+                <select
+                  value={taskPriorityInput}
+                  onChange={(e) =>
+                    setTaskPriorityInput(e.target.value as "ALL" | TaskPriority)
+                  }
+                >
                   <option value="ALL">All priorities</option>
                   {taskPriorities.map((priority) => (
                     <option key={priority} value={priority}>
@@ -731,7 +838,10 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Assignee</span>
-                <select value={taskAssigneeInput} onChange={(e) => setTaskAssigneeInput(e.target.value)}>
+                <select
+                  value={taskAssigneeInput}
+                  onChange={(e) => setTaskAssigneeInput(e.target.value)}
+                >
                   <option value="ALL">All assignees</option>
                   {members.map((member) => (
                     <option key={member.userId} value={member.userId}>
@@ -743,7 +853,10 @@ export default function ProjectDetailsPage() {
 
               <label className="board-filter-inline-label">
                 <span>Version</span>
-                <select value={taskVersionInput} onChange={(e) => setTaskVersionInput(e.target.value)}>
+                <select
+                  value={taskVersionInput}
+                  onChange={(e) => setTaskVersionInput(e.target.value)}
+                >
                   <option value="ALL">All versions</option>
                   {availableTaskVersions.map((version) => (
                     <option key={version} value={version}>
@@ -789,119 +902,172 @@ export default function ProjectDetailsPage() {
             </div>
           </section>
 
-          {tasks.length === 0 ? <div className="empty-state">No tasks yet. Create the first task to start the board.</div> : null}
-          {tasks.length > 0 && filteredTasks.length === 0 ? <div className="empty-state">No tasks match current filters.</div> : null}
+          {tasks.length === 0 ? (
+            <div className="empty-state">
+              No tasks yet. Create the first task to start the board.
+            </div>
+          ) : null}
+          {tasks.length > 0 && filteredTasks.length === 0 ? (
+            <div className="empty-state">No tasks match current filters.</div>
+          ) : null}
 
           {filteredTasks.length > 0 ? (
             <section className="kanban-shell kanban-shell-expanded">
-                {filteredTasks.length > 0 ? (
-                  <section className="kanban kanban-four kanban-board-dense" data-testid="kanban-board">
-                    {taskStatuses.map((status) => (
-                      <article
-                        key={status}
-                        className={`kanban-column kanban-column-dense${dragState ? " kanban-column-droppable" : ""}`}
-                        data-testid={`kanban-column-${status.toLowerCase()}`}
-                        onDragOver={(event) => onDragOverZone(event, status, groupedTasks[status].length)}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void onDropTask(status, groupedTasks[status].length);
-                        }}
-                      >
-                        <div className="kanban-column-header">
-                          <div>
-                            <h3>{getTaskStatusLabel(status)}</h3>
-                            <p className="meta">{groupedTasks[status].length} tasks</p>
-                          </div>
-                          <span className="badge badge-neutral">{status.replace("_", " ")}</span>
+              {filteredTasks.length > 0 ? (
+                <section
+                  className="kanban kanban-four kanban-board-dense"
+                  data-testid="kanban-board"
+                >
+                  {taskStatuses.map((status) => (
+                    <article
+                      key={status}
+                      className={`kanban-column kanban-column-dense${dragState ? " kanban-column-droppable" : ""}`}
+                      data-testid={`kanban-column-${status.toLowerCase()}`}
+                      onDragOver={(event) =>
+                        onDragOverZone(
+                          event,
+                          status,
+                          groupedTasks[status].length,
+                        )
+                      }
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void onDropTask(status, groupedTasks[status].length);
+                      }}
+                    >
+                      <div className="kanban-column-header">
+                        <div>
+                          <h3>{getTaskStatusLabel(status)}</h3>
+                          <p className="meta">
+                            {groupedTasks[status].length} tasks
+                          </p>
                         </div>
+                        <span className="badge badge-neutral">
+                          {status.replace("_", " ")}
+                        </span>
+                      </div>
 
-                        {groupedTasks[status].length === 0 ? (
-                          <div
-                            className={`kanban-empty-drop${dropIndicator?.status === status && dropIndicator?.index === 0 ? " kanban-empty-drop-active" : ""}`}
-                            onDragOver={(event) => onDragOverZone(event, status, 0)}
-                            onDrop={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              void onDropTask(status, 0);
-                            }}
-                          >
-                            <p className="meta">Drop a task here</p>
-                          </div>
-                        ) : (
-                          <ul className="kanban-list">
-                            {groupedTasks[status].map((task, index) => {
-                              const assignee = task.assigneeId ? membersById.get(task.assigneeId) : null;
-                              const busy = taskActionId === task.id;
+                      {groupedTasks[status].length === 0 ? (
+                        <div
+                          className={`kanban-empty-drop${dropIndicator?.status === status && dropIndicator?.index === 0 ? " kanban-empty-drop-active" : ""}`}
+                          onDragOver={(event) =>
+                            onDragOverZone(event, status, 0)
+                          }
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void onDropTask(status, 0);
+                          }}
+                        >
+                          <p className="meta">Drop a task here</p>
+                        </div>
+                      ) : (
+                        <ul className="kanban-list">
+                          {groupedTasks[status].map((task, index) => {
+                            const assignee = task.assigneeId
+                              ? membersById.get(task.assigneeId)
+                              : null;
+                            const busy = taskActionId === task.id;
 
-                              return (
-                                <li key={task.id} className="kanban-lane-item">
-                                  <div
-                                    className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === index ? " kanban-dropzone-active" : ""}`}
-                                    onDragOver={(event) => onDragOverZone(event, status, index)}
-                                    onDrop={(event) => {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      void onDropTask(status, index);
-                                    }}
-                                  />
+                            return (
+                              <li key={task.id} className="kanban-lane-item">
+                                <div
+                                  className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === index ? " kanban-dropzone-active" : ""}`}
+                                  onDragOver={(event) =>
+                                    onDragOverZone(event, status, index)
+                                  }
+                                  onDrop={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    void onDropTask(status, index);
+                                  }}
+                                />
 
-                                  <article
-                                    className="kanban-item kanban-item-dense"
-                                    draggable={!busy}
-                                    onMouseDown={(event) =>
-                                      onTaskCardMouseDown(event, task.id)
-                                    }
-                                    onMouseUp={(event) =>
-                                      onTaskCardMouseUp(event, task)
-                                    }
-                                    onDragStart={(event) => onDragStartTask(event, task)}
-                                    onDragEnd={() => {
-                                      clearDragState();
-                                      setTaskCardPointerState(null);
-                                    }}
-                                    data-testid={`task-card-${task.id}`}
-                                  >
-                                    <div className="kanban-item-trigger">
-                                      <div className="kanban-item-topline">
-                                        <span className={`badge ${getPriorityBadgeClass(task.priority)}`}>{task.priority}</span>
-                                        <span className="badge badge-neutral">v{task.version}</span>
-                                      </div>
-                                      <strong>{task.title}</strong>
-                                      <p className="kanban-item-description">{task.description || "Short description not added."}</p>
-                                      <div className="kanban-item-footer">
-                                        <span className="member-pill">
-                                          <span className="member-pill-avatar">{getMemberInitial(assignee)}</span>
-                                          <span>{getMemberLabel(assignee)}</span>
-                                        </span>
-                                      </div>
-                                      <div className="kanban-item-meta-row">
-                                        <span className="meta">#{task.order}</span>
-                                        <span className="meta">Updated {formatDateTime(task.updatedAt)}</span>
-                                      </div>
-                                      <div className="kanban-item-hint">Drag between columns</div>
+                                <article
+                                  className="kanban-item kanban-item-dense"
+                                  draggable={!busy}
+                                  onMouseDown={(event) =>
+                                    onTaskCardMouseDown(event, task.id)
+                                  }
+                                  onMouseUp={(event) =>
+                                    onTaskCardMouseUp(event, task)
+                                  }
+                                  onDragStart={(event) =>
+                                    onDragStartTask(event, task)
+                                  }
+                                  onDragEnd={() => {
+                                    clearDragState();
+                                    setTaskCardPointerState(null);
+                                  }}
+                                  data-testid={`task-card-${task.id}`}
+                                >
+                                  <div className="kanban-item-trigger">
+                                    <div className="kanban-item-topline">
+                                      <span
+                                        className={`badge ${getPriorityBadgeClass(task.priority)}`}
+                                      >
+                                        {task.priority}
+                                      </span>
+                                      <span className="badge badge-neutral">
+                                        v{task.version}
+                                      </span>
                                     </div>
-                                  </article>
-                                </li>
-                              );
-                            })}
-                            <li>
-                              <div
-                                className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === groupedTasks[status].length ? " kanban-dropzone-active" : ""}`}
-                                onDragOver={(event) => onDragOverZone(event, status, groupedTasks[status].length)}
-                                onDrop={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  void onDropTask(status, groupedTasks[status].length);
-                                }}
-                              />
-                            </li>
-                          </ul>
-                        )}
-                      </article>
-                    ))}
-                  </section>
-                ) : null}
+                                    <strong>{task.title}</strong>
+                                    <p className="kanban-item-description">
+                                      {task.description ||
+                                        "Short description not added."}
+                                    </p>
+                                    <div className="kanban-item-footer">
+                                      <span className="member-pill">
+                                        <span className="member-pill-avatar">
+                                          {getMemberInitial(assignee)}
+                                        </span>
+                                        <span>{getMemberLabel(assignee)}</span>
+                                      </span>
+                                    </div>
+                                    <div className="kanban-item-meta-row">
+                                      <span className="meta">
+                                        #{task.order}
+                                      </span>
+                                      <span className="meta">
+                                        Updated {formatDateTime(task.updatedAt)}
+                                      </span>
+                                    </div>
+                                    <div className="kanban-item-hint">
+                                      Drag between columns
+                                    </div>
+                                  </div>
+                                </article>
+                              </li>
+                            );
+                          })}
+                          <li>
+                            <div
+                              className={`kanban-dropzone${dropIndicator?.status === status && dropIndicator?.index === groupedTasks[status].length ? " kanban-dropzone-active" : ""}`}
+                              onDragOver={(event) =>
+                                onDragOverZone(
+                                  event,
+                                  status,
+                                  groupedTasks[status].length,
+                                )
+                              }
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void onDropTask(
+                                  status,
+                                  groupedTasks[status].length,
+                                );
+                              }}
+                            />
+                          </li>
+                        </ul>
+                      )}
+                    </article>
+                  ))}
+                </section>
+              ) : null}
             </section>
           ) : null}
 
@@ -926,7 +1092,8 @@ export default function ProjectDetailsPage() {
                   <div>
                     <h2 id="task-create-modal-title">Create task</h2>
                     <p className="soft">
-                      Add the next task with description, priority, and assignee in one place.
+                      Add the next task with description, priority, and assignee
+                      in one place.
                     </p>
                   </div>
                   <button
@@ -939,7 +1106,10 @@ export default function ProjectDetailsPage() {
                   </button>
                 </div>
 
-                <form className="auth-form auth-form-compact task-create-modal-form" onSubmit={onCreateTask}>
+                <form
+                  className="auth-form auth-form-compact task-create-modal-form"
+                  onSubmit={onCreateTask}
+                >
                   <div className="task-create-modal-grid">
                     <label>
                       Task title
@@ -948,7 +1118,7 @@ export default function ProjectDetailsPage() {
                         value={newTaskTitle}
                         onChange={(e) => setNewTaskTitle(e.target.value)}
                         minLength={1}
-                        maxLength={80}
+                        maxLength={70}
                         required
                       />
                     </label>
@@ -957,7 +1127,9 @@ export default function ProjectDetailsPage() {
                       Priority
                       <select
                         value={newTaskPriority}
-                        onChange={(e) => setNewTaskPriority(e.target.value as TaskPriority)}
+                        onChange={(e) =>
+                          setNewTaskPriority(e.target.value as TaskPriority)
+                        }
                         style={{ minHeight: 42 }}
                       >
                         {taskPriorities.map((priority) => (
@@ -971,7 +1143,11 @@ export default function ProjectDetailsPage() {
                     <label>
                       Assignee
                       <select
-                        value={currentProjectRole === "MEMBER" && user ? user.id : newTaskAssigneeId}
+                        value={
+                          currentProjectRole === "MEMBER" && user
+                            ? user.id
+                            : newTaskAssigneeId
+                        }
                         onChange={(e) => setNewTaskAssigneeId(e.target.value)}
                         disabled={currentProjectRole === "MEMBER"}
                         style={{ minHeight: 42 }}
@@ -990,14 +1166,14 @@ export default function ProjectDetailsPage() {
 
                   <label>
                     Description <span className="meta">(optional)</span>
-                      <textarea
-                        data-testid="task-description-input"
-                        value={newTaskDescription}
-                        onChange={(e) => setNewTaskDescription(e.target.value)}
-                        placeholder="Describe the task, expected result, and important context"
-                        maxLength={300}
-                        rows={8}
-                      />
+                    <textarea
+                      data-testid="task-description-input"
+                      value={newTaskDescription}
+                      onChange={(e) => setNewTaskDescription(e.target.value)}
+                      placeholder="Describe the task, expected result, and important context"
+                      maxLength={1000}
+                      rows={8}
+                    />
                   </label>
 
                   <div className="task-create-modal-actions">
@@ -1030,7 +1206,9 @@ export default function ProjectDetailsPage() {
           <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Members</h2>
-              <p className="soft">Manage who can access this project and what role they have.</p>
+              <p className="soft">
+                Manage who can access this project and what role they have.
+              </p>
             </div>
           </section>
 
@@ -1054,25 +1232,48 @@ export default function ProjectDetailsPage() {
               <div className="stack stack-sm">
                 <div>
                   <h2>Add member</h2>
-                  <p className="soft">Invite a teammate with the right responsibility level.</p>
+                  <p className="soft">
+                    Invite a teammate with the right responsibility level.
+                  </p>
                 </div>
 
-                <form className="auth-form auth-form-compact" onSubmit={onAddMember}>
+                <form
+                  className="auth-form auth-form-compact"
+                  onSubmit={onAddMember}
+                >
                   <label>
                     User ID
-                    <input data-testid="member-user-id-input" placeholder="Paste user id" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} required />
+                    <input
+                      data-testid="member-user-id-input"
+                      placeholder="Paste user id"
+                      value={newUserId}
+                      onChange={(e) => setNewUserId(e.target.value)}
+                      required
+                    />
                   </label>
 
                   <label>
                     Role
-                    <select value={newRole} onChange={(e) => setNewRole(e.target.value as ProjectRole)} style={{ minHeight: 42 }}>
+                    <select
+                      value={newRole}
+                      onChange={(e) =>
+                        setNewRole(e.target.value as ProjectRole)
+                      }
+                      style={{ minHeight: 42 }}
+                    >
                       {roles.map((role) => (
-                        <option key={role} value={role}>{role}</option>
+                        <option key={role} value={role}>
+                          {role}
+                        </option>
                       ))}
                     </select>
                   </label>
 
-                  <button className="button button-primary" type="submit" disabled={memberPending}>
+                  <button
+                    className="button button-primary"
+                    type="submit"
+                    disabled={memberPending}
+                  >
                     {memberPending ? "Saving..." : "Add member"}
                   </button>
                 </form>
@@ -1080,7 +1281,11 @@ export default function ProjectDetailsPage() {
             </aside>
 
             <section className="stack">
-              {members.length === 0 ? <div className="empty-state">No members in this project yet.</div> : null}
+              {members.length === 0 ? (
+                <div className="empty-state">
+                  No members in this project yet.
+                </div>
+              ) : null}
 
               <div className="projects-list-shell">
                 <div className="projects-list-header">
@@ -1095,7 +1300,9 @@ export default function ProjectDetailsPage() {
                     <li key={member.userId} className="projects-row">
                       <div className="projects-row-main">
                         <div className="member-cell">
-                          <div className="member-avatar">{getMemberInitial(member)}</div>
+                          <div className="member-avatar">
+                            {getMemberInitial(member)}
+                          </div>
                           <div className="member-identity">
                             <strong>{getMemberLabel(member)}</strong>
                             <span className="meta">{member.userId}</span>
@@ -1106,12 +1313,21 @@ export default function ProjectDetailsPage() {
                         <span className="soft">{member.user.email}</span>
                       </div>
                       <div className="projects-row-updated">
-                        <span className={`badge ${member.role === "OWNER" ? "badge-ok" : "badge-neutral"}`}>
+                        <span
+                          className={`badge ${member.role === "OWNER" ? "badge-ok" : "badge-neutral"}`}
+                        >
                           {member.role}
                         </span>
                       </div>
                       <div className="projects-row-actions">
-                        <button className="button button-ghost button-compact" type="button" disabled={memberPending || member.role === "OWNER"} onClick={() => void onRemoveMember(member.userId)}>Remove</button>
+                        <button
+                          className="button button-ghost button-compact"
+                          type="button"
+                          disabled={memberPending || member.role === "OWNER"}
+                          onClick={() => void onRemoveMember(member.userId)}
+                        >
+                          Remove
+                        </button>
                       </div>
                     </li>
                   ))}
@@ -1127,7 +1343,10 @@ export default function ProjectDetailsPage() {
           <section className="board-toolbar board-toolbar-compact">
             <div>
               <h2>Activity</h2>
-              <p className="soft">Follow the live project feed alongside audit-backed history for this project.</p>
+              <p className="soft">
+                Follow the live project feed alongside audit-backed history for
+                this project.
+              </p>
             </div>
           </section>
 
@@ -1151,20 +1370,31 @@ export default function ProjectDetailsPage() {
               <div className="panel-header panel-header-inline">
                 <div>
                   <h2>Realtime feed</h2>
-                  <p className="meta">WebSocket updates appear here while teammates work in the project.</p>
+                  <p className="meta">
+                    WebSocket updates appear here while teammates work in the
+                    project.
+                  </p>
                 </div>
                 <span className="meta">{events.length} recent events</span>
               </div>
               {events.length === 0 ? (
-                <div className="empty-state empty-state-fill">No realtime updates yet. This panel fills as project events arrive live.</div>
+                <div className="empty-state empty-state-fill">
+                  No realtime updates yet. This panel fills as project events
+                  arrive live.
+                </div>
               ) : (
                 <ul className="activity-feed activity-feed-timeline">
                   {events.map((event, index) => (
-                    <li key={`${event.type}-${event.timestamp}-${index}`} className="activity-item">
+                    <li
+                      key={`${event.type}-${event.timestamp}-${index}`}
+                      className="activity-item"
+                    >
                       <div className="activity-dot" />
                       <div className="activity-copy">
                         <strong>{event.type}</strong>
-                        <p className="meta">{new Date(event.timestamp).toLocaleString()}</p>
+                        <p className="meta">
+                          {new Date(event.timestamp).toLocaleString()}
+                        </p>
                       </div>
                     </li>
                   ))}
@@ -1175,11 +1405,16 @@ export default function ProjectDetailsPage() {
             <article className="item-card activity-card-tall">
               <div className="panel-header panel-header-inline">
                 <h2>Audit history</h2>
-                <span className="meta">{canViewActivity ? "Scoped access" : "Admin only"}</span>
+                <span className="meta">
+                  {canViewActivity ? "Scoped access" : "Admin only"}
+                </span>
               </div>
 
               {!canViewActivity ? (
-                <div className="empty-state empty-state-fill">Audit history is limited to administrators. The realtime feed remains visible to all project members.</div>
+                <div className="empty-state empty-state-fill">
+                  Audit history is limited to administrators. The realtime feed
+                  remains visible to all project members.
+                </div>
               ) : null}
 
               {canViewActivity && activityLoading ? (
@@ -1190,10 +1425,16 @@ export default function ProjectDetailsPage() {
                 </div>
               ) : null}
 
-              {canViewActivity && activityError ? <p className="error-text">{activityError}</p> : null}
+              {canViewActivity && activityError ? (
+                <p className="error-text">{activityError}</p>
+              ) : null}
 
-              {canViewActivity && !activityLoading && projectAudit.length === 0 ? (
-                <div className="empty-state empty-state-fill">No audit records found for this project yet.</div>
+              {canViewActivity &&
+              !activityLoading &&
+              projectAudit.length === 0 ? (
+                <div className="empty-state empty-state-fill">
+                  No audit records found for this project yet.
+                </div>
               ) : null}
 
               {canViewActivity && projectAudit.length > 0 ? (
@@ -1204,9 +1445,12 @@ export default function ProjectDetailsPage() {
                       <div className="activity-copy">
                         <strong>{log.action}</strong>
                         <p className="meta">
-                          {log.entityType || "system"} - {log.entityId || "n/a"} - request {log.requestId || "n/a"}
+                          {log.entityType || "system"} - {log.entityId || "n/a"}{" "}
+                          - request {log.requestId || "n/a"}
                         </p>
-                        <p className="meta">{new Date(log.createdAt).toLocaleString()}</p>
+                        <p className="meta">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </p>
                       </div>
                     </li>
                   ))}
@@ -1219,6 +1463,3 @@ export default function ProjectDetailsPage() {
     </div>
   );
 }
-
-
-

@@ -12,12 +12,12 @@ import {
 export class CreateTaskDto {
   @IsString()
   @MinLength(1)
-  @MaxLength(80)
+  @MaxLength(70)
   title!: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(300)
+  @MaxLength(1000)
   description?: string;
 
   @IsOptional()

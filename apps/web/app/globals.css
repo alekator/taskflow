@@ -313,7 +313,7 @@ a {
   color: var(--ink-700);
   line-height: 1.5;
   margin-top: 10px;
-  max-width: 64ch;
+  max-width: 98ch;
 }
 
 .panel-header {
@@ -1234,17 +1234,30 @@ a {
 }
 
 .project-header-main {
-  display: grid;
-  gap: 8px;
+  display: block;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
 }
 
-.project-description-preview {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.project-header-main h1 {
+  margin: 0 0 10px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.panel .project-description-preview {
+  color: var(--ink-700);
+  display: block;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 122ch;
+  min-width: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: wrap;
+  white-space: normal;
 }
 
 .project-breadcrumbs {
@@ -1254,6 +1267,26 @@ a {
   gap: 8px;
   font-size: 0.82rem;
   font-weight: 700;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+  min-width: 0;
+}
+
+.project-breadcrumbs span:last-child,
+.project-breadcrumbs a {
+  overflow-wrap: anywhere;
+}
+
+.stack > .panel-header h1 {
+  margin: 0;
+  max-width: min(100%, 96ch);
+  overflow-wrap: anywhere;
+}
+
+.stack > .panel-header > p:not(.meta) {
+  margin: 0;
+  max-width: min(100%, 96ch);
+  overflow-wrap: anywhere;
 }
 
 .project-breadcrumbs a:hover {
@@ -3171,7 +3204,7 @@ a {
   align-items: start;
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
 }
 
 .task-description-block {
@@ -3186,15 +3219,15 @@ a {
   margin: 0;
 }
 
-.task-description-block p {
+.panel .task-description-block p {
   color: var(--ink-700);
   hyphens: auto;
   text-align: left;
-  text-wrap: pretty;
+  text-wrap: wrap;
   line-height: 1.55;
   margin: 0;
   overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .task-todo-block {
