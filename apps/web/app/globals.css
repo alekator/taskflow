@@ -1055,27 +1055,54 @@ a {
 }
 
 .workspace-pulse-tooltip strong {
+  display: block;
   font-family: var(--font-heading);
   line-height: 1.2;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-pulse-tooltip p {
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.workspace-pulse-tooltip p.meta {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .workspace-pulse-tooltip-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
 }
 
 .workspace-pulse-tooltip-stats span {
   background: rgb(17 20 15 / 4%);
   border-radius: 999px;
   color: var(--ink-800);
+  display: inline-flex;
   font-size: 0.73rem;
   font-weight: 700;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 4px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-pulse-tooltip-link {
@@ -1421,6 +1448,10 @@ a {
   display: inline-flex;
   gap: 8px;
   min-width: 110px;
+}
+
+.projects-toolbar .workspace-tasks-filters-title {
+  min-width: auto;
 }
 
 .workspace-tasks-filters-title .meta {

@@ -156,24 +156,47 @@ export default function ProjectsPage() {
               </p>
             </div>
 
-            <div className="toolbar project-searchbar">
-              <input
-                data-testid="project-search-input"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name or description"
-              />
-              <button
-                data-testid="project-search-apply"
-                className="button button-ghost"
-                type="button"
-                onClick={() => {
-                  setPage(1);
-                  setSubmittedSearch(search.trim());
-                }}
-              >
-                Apply
-              </button>
+            <div className="item-card workspace-tasks-filters">
+              <div className="workspace-tasks-filters-row">
+                <div className="workspace-tasks-filters-title">
+                  <span className="meta">Filters</span>
+                </div>
+
+                <label className="board-filter-inline-label board-filter-search">
+                  <span>Search</span>
+                  <input
+                    data-testid="project-search-input"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Name or description"
+                  />
+                </label>
+
+                <div className="workspace-tasks-filters-actions">
+                  <button
+                    data-testid="project-search-apply"
+                    className="button button-primary"
+                    type="button"
+                    onClick={() => {
+                      setPage(1);
+                      setSubmittedSearch(search.trim());
+                    }}
+                  >
+                    Apply
+                  </button>
+                  <button
+                    className="button button-ghost"
+                    type="button"
+                    onClick={() => {
+                      setPage(1);
+                      setSearch("");
+                      setSubmittedSearch("");
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
