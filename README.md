@@ -71,6 +71,69 @@ What it does:
 
 This command is safe to re-run. Existing `.env` files are left untouched.
 
+## Production Deployment
+
+The repository now includes a production deployment path built around Docker:
+
+- `apps/api/Dockerfile`
+- `apps/web/Dockerfile`
+- `docker-compose.prod.yml`
+- `deploy/nginx.prod.conf`
+
+### Production Quick Start
+
+1. Copy the backend production env file:
+
+```bash
+cp apps/api/.env.production.example apps/api/.env.production
+```
+
+2. Edit `apps/api/.env.production`:
+
+- replace `JWT_ACCESS_SECRET`
+- replace `JWT_REFRESH_SECRET`
+- set `CORS_ORIGINS` to your public origin
+  - example: `https://taskflow.example.com`
+  - for a local production-style smoke test: `http://localhost`
+
+3. Build and start the full stack:
+
+```bash
+pnpm prod:up
+```
+
+This starts:
+
+- PostgreSQL
+- Redis
+- NestJS API in production mode
+- Next.js web app in production mode
+- Nginx reverse proxy on port `80`
+
+The API container runs `prisma migrate deploy` automatically before it starts.
+
+### Public URLs
+
+After startup:
+
+- App: `http://YOUR_SERVER_IP/`
+- API: `http://YOUR_SERVER_IP/api`
+- Swagger: `http://YOUR_SERVER_IP/api/docs`
+
+### Production Commands
+
+```bash
+pnpm prod:up
+pnpm prod:logs
+pnpm prod:down
+```
+
+### Production Notes
+
+- The web build is configured to use same-origin API calls via `/api`, so you do not need a separate frontend production env file for the default Docker deployment.
+- `docker-compose.prod.yml` currently uses the default PostgreSQL credentials `taskflow/taskflow` for simplicity. If you change them, update `DATABASE_URL` in `apps/api/.env.production` to match.
+- For a public internet deployment, put TLS in front of this stack (or extend the nginx container to serve HTTPS directly).
+
 ## Quick Start (Local)
 
 ### 1. Install dependencies

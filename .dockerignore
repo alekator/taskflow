@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+.git
+.github
+.turbo
+coverage
+dist
+build
+*.log
+
+apps/web/.next
+apps/web/test-results
+apps/api/coverage
