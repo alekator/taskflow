@@ -11,6 +11,8 @@ async function getValidAccessToken(): Promise<string | null> {
   if (!session?.refreshToken) return null;
 
   if (!refreshInFlight) {
+    // Share one refresh request across all callers so parallel 401s do not
+    // trigger a burst of competing refresh attempts.
     refreshInFlight = refreshApi(session.refreshToken)
       .then((tokens) => {
         const next = {
@@ -59,6 +61,8 @@ export async function authFetch<T>(
 
   let res = await execute(session?.accessToken ?? null);
 
+  // Retry once after token refresh. The request body stays deterministic because
+  // callers pass plain JSON-serializable data to authFetch.
   if (res.status === 401 && session?.refreshToken) {
     const token = await getValidAccessToken();
     if (token) {

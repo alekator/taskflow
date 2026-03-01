@@ -39,6 +39,8 @@ const clamp = (v: number, min: number, max: number) =>
   Math.min(max, Math.max(min, v));
 
 function baseDoc(taskId: string): TaskRoadmapData {
+  // The canvas always works against a complete document shape so local drawing
+  // can start before the server has stored any roadmap state.
   return {
     version: 1,
     taskId,
@@ -221,6 +223,8 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
       timerRef.current = window.setTimeout(async () => {
         const token = ++saveTokenRef.current;
         try {
+          // Debounce roadmap saves and ignore stale completions so rapid edits
+          // do not let an older response overwrite a newer local document.
           setSaving(true);
           const res = await updateTaskRoadmap(taskId, {
             ...next,
@@ -246,6 +250,8 @@ export function TaskRoadmapPanel({ taskId }: { taskId: string }) {
 
   const patchDoc = useCallback(
     (fn: (d: TaskRoadmapData) => TaskRoadmapData, persist = true) => {
+      // Centralize document writes so interactive tools and toolbar actions all
+      // follow the same autosave behavior.
       setDocSafe((prev) => {
         const next = fn(prev);
         if (persist) saveSoon(next);

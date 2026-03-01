@@ -13,6 +13,8 @@ export function requireIfMatchVersion(ifMatchHeader?: string): number {
     );
   }
 
+  // Accept both strong and weak ETag forms so browser/proxy formatting does not
+  // break optimistic concurrency for otherwise valid clients.
   const normalized = ifMatchHeader.trim().replace(/^W\//, '');
   const value =
     normalized.startsWith('"') && normalized.endsWith('"')
@@ -28,6 +30,8 @@ export function requireIfMatchVersion(ifMatchHeader?: string): number {
 }
 
 export function assertVersionMatch(actual: number, expected: number): void {
+  // Callers use this to fail fast before writing, which keeps stale clients from
+  // silently overwriting a newer document version.
   if (actual !== expected) {
     throw new PreconditionFailedException('Version mismatch');
   }

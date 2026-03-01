@@ -64,6 +64,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
     ).pipe(
       switchMap((beginResult) => {
         if (beginResult.type === 'replay') {
+          // Return the recorded payload as-is so clients can safely retry after
+          // network failures without duplicating side effects.
           res.status(beginResult.statusCode ?? 200);
           return of(beginResult.responseBody);
         }
@@ -78,6 +80,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
         }
 
         return next.handle().pipe(
+          // Persist the final response only after the handler succeeds; failed
+          // attempts are cleared so the client can retry with the same key.
           mergeMap((responseBody: unknown) =>
             from(
               this.idempotency.complete(

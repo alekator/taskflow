@@ -31,6 +31,8 @@ export class AuthService {
     private jwt: JwtService,
     private audit: AuditService,
   ) {
+    // Validate secrets on boot so auth fails loudly during startup instead of
+    // producing hard-to-debug token errors later at request time.
     const access = process.env.JWT_ACCESS_SECRET;
     const refresh = process.env.JWT_REFRESH_SECRET;
     if (!access) throw new Error('JWT_ACCESS_SECRET is not set');
@@ -71,6 +73,8 @@ export class AuthService {
 
     const p = payload as { sub?: string; type?: string; jti?: string };
 
+    // Refresh tokens are deliberately stricter than access tokens because they
+    // control long-lived session renewal.
     if (!p.sub || p.type !== 'refresh' || !p.jti) {
       throw new UnauthorizedException('Invalid token');
     }
@@ -111,6 +115,8 @@ export class AuthService {
     const { jti } = this.verifyRefreshToken(refreshToken);
     const refreshJtiHash = await bcrypt.hash(jti, 10);
 
+    // Store only the refresh token identifier hash. That keeps refresh tokens
+    // one-time rotatable without persisting the raw token server-side.
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -213,6 +219,8 @@ export class AuthService {
     const ok = await bcrypt.compare(payload.jti, user.refreshJtiHash);
     if (!ok) throw new UnauthorizedException('Invalid token');
 
+    // Rotate the refresh JTI on every refresh so a stolen old token cannot be
+    // replayed after the user has already renewed the session.
     const newAccessToken = this.signAccessToken({
       id: user.id,
       email: user.email,

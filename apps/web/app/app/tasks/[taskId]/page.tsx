@@ -81,6 +81,8 @@ export default function TaskDetailsPage() {
   useEffect(() => {
     if (!task) return;
 
+    // Member options depend on the task's owning project, so fetch them only
+    // after the primary task payload is known.
     const run = async () => {
       try {
         const response = await listProjectMembers(task.project.id, {
@@ -105,6 +107,8 @@ export default function TaskDetailsPage() {
     setUpdateError(null);
 
     try {
+      // Task metadata and assignment use different API endpoints. Only send the
+      // writes that actually changed, then refetch once to resync the UI.
       if (statusValue !== task.status || priorityValue !== task.priority) {
         await updateProjectTask(task.project.id, task.id, task.version, {
           status: statusValue,

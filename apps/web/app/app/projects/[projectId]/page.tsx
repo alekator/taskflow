@@ -107,6 +107,8 @@ function projectTaskMove(
   targetStatus: TaskStatus,
   targetIndex: number,
 ): MoveProjection | null {
+  // Compute the post-drop ordering locally first so drag-and-drop feels instant.
+  // The caller persists only the rows that actually changed.
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const sourceTask = taskMap.get(dragState.taskId);
 
@@ -372,6 +374,8 @@ export default function ProjectDetailsPage() {
     setError(null);
 
     try {
+      // Fetch the core workspace payload together so board, members, and header
+      // statistics always render from the same refresh cycle.
       const [projectData, membersData, tasksData] = await Promise.all([
         getProject(projectId),
         listProjectMembers(projectId, {
@@ -411,6 +415,8 @@ export default function ProjectDetailsPage() {
     setActivityError(null);
 
     try {
+      // The activity tab is lazily hydrated because audit history is secondary
+      // to the board view and materially heavier than the project payload.
       const auditRes = await listAuditLogs({ page: 1, limit: 50, projectId });
       setProjectAudit(auditRes.items.slice(0, 12));
     } catch (err) {
@@ -465,6 +471,8 @@ export default function ProjectDetailsPage() {
   };
 
   const openCreateTaskModal = () => {
+    // Members are restricted to self-assignment, so seed the form with the
+    // current user and lock the selector before the dialog opens.
     const defaultAssigneeId =
       currentProjectRole === "MEMBER" && user ? user.id : "";
     setNewTaskTitle("");
@@ -632,6 +640,8 @@ export default function ProjectDetailsPage() {
     if (!projection) return;
 
     const previousTasks = tasks;
+    // Optimistically reorder first so the board reacts immediately, then roll
+    // back if any versioned update fails server-side.
     setTasks(projection.nextTasks);
     setTaskActionId(activeDrag.taskId);
     setError(null);

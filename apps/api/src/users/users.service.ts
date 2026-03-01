@@ -71,6 +71,8 @@ export class UsersService {
 
     const userIds = users.map((user) => user.id);
 
+    // Compute workload aggregates in batch to avoid N+1 counting queries for
+    // each user row in the workspace directory.
     const [activeTaskCounts, completedTaskCounts, totalTaskCounts] =
       await Promise.all([
         this.prisma.task.groupBy({
@@ -110,6 +112,8 @@ export class UsersService {
       totalTaskCounts.map((row) => [row.assigneeId, row._count._all]),
     );
 
+    // Merge relational data and aggregated counters into a flat DTO so the UI
+    // can render the directory without additional follow-up requests.
     const items: WorkspaceUserItem[] = users.map((user) => ({
       id: user.id,
       email: user.email,

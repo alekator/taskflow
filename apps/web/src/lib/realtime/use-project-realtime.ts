@@ -38,6 +38,7 @@ export function useProjectRealtime(
   const onProjectEventRef = useRef(onProjectEvent);
   const onTaskEventRef = useRef(onTaskEvent);
 
+  // Keep callback refs fresh without re-opening the socket on every render.
   useEffect(() => {
     onProjectEventRef.current = onProjectEvent;
   }, [onProjectEvent]);
@@ -54,6 +55,8 @@ export function useProjectRealtime(
 
     const connect = async () => {
       const ioClient = await import("socket.io-client");
+      // The dynamic import may resolve after the component unmounts or changes
+      // projectId, so guard against attaching a stale socket instance.
       if (!active) return;
 
       const socket = ioClient.io(`${API_ORIGIN}/realtime`, {

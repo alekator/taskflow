@@ -43,6 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
+      // Revalidate the persisted session on boot so stale local storage cannot
+      // keep the UI in an authenticated state after server-side logout/expiry.
       const session = readSession();
 
       if (!session) {
@@ -53,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const user = await getMe(session.accessToken);
         const next: AuthSession = { ...session, user };
+        // Persist the refreshed user payload so role/name changes propagate to
+        // later page loads without requiring another full login.
         writeSession(next);
 
         setState({
@@ -110,6 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Always clear local auth state even if the network request fails, because
+    // the local browser should never remain "half logged out".
     clearSession();
     setState({
       isReady: true,

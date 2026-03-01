@@ -29,6 +29,8 @@ export class TasksService {
     });
     if (!project) throw new NotFoundException('Project not found');
 
+    // Owners keep full access even if the membership row is missing, so task
+    // permissions follow project ownership as the source of truth.
     if (project.ownerId === userId) return ProjectRole.OWNER;
 
     const member = await this.prisma.projectMember.findUnique({
@@ -69,6 +71,8 @@ export class TasksService {
   }
 
   private buildWorkspaceAccessWhere(userId: string, userRole: string) {
+    // Workspace task views are cross-project, so access has to be expressed via
+    // the related project rather than a direct task field.
     if (userRole === 'ADMIN') {
       return {};
     }
@@ -100,6 +104,8 @@ export class TasksService {
   }
 
   private buildDefaultRoadmapData(taskId: string): Prisma.JsonObject {
+    // Return a full document shape so the client can render a usable canvas
+    // immediately, even before the first explicit roadmap save exists.
     return {
       version: 1,
       taskId,
@@ -225,6 +231,8 @@ export class TasksService {
 
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
     const role = await this.getMyProjectRole(userId, projectId);
+    // Members can only create work for themselves. Owners/managers may set an
+    // assignee explicitly, but only after membership validation.
     const assigneeId =
       role === ProjectRole.MEMBER ? userId : (dto.assigneeId ?? undefined);
 
@@ -310,6 +318,8 @@ export class TasksService {
       throw new ForbiddenException();
     }
 
+    // Reject stale clients before the write and again in the write condition.
+    // The double-check keeps UX errors clear while still being race-safe.
     const expectedVersion = requireIfMatchVersion(ifMatchHeader);
     if (task.version !== expectedVersion) {
       throw new PreconditionFailedException('Version mismatch');
@@ -425,6 +435,8 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException('Task not found');
 
+    // Assignment is intentionally constrained to project participants so tasks
+    // never point at users who cannot open the project.
     await this.ensureAssignableProjectUser(projectId, assigneeId);
 
     const updated = await this.prisma.task.update({

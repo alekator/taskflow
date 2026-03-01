@@ -113,6 +113,8 @@ export class NotificationsService {
     userRole: string,
     accessibleProjectIds: string[],
   ): Prisma.AuditLogWhereInput {
+    // Non-admin users only see project activity inside their workspace scope,
+    // plus account-related records that directly concern them.
     const projectScope: Prisma.AuditLogWhereInput =
       userRole === UserRole.ADMIN
         ? { projectId: { not: null } }
@@ -133,6 +135,8 @@ export class NotificationsService {
   }
 
   private async loadRelatedEntities(logs: AuditLogRow[]) {
+    // Resolve all referenced entities up front so notification rendering stays
+    // deterministic and avoids one lookup per audit log row.
     const projectIds = Array.from(
       new Set(logs.map((log) => log.projectId).filter(Boolean)),
     ) as string[];

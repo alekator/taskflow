@@ -37,6 +37,8 @@ export class ProjectsService {
     const project = await this.getProject(projectId);
     if (!project) throw new NotFoundException('Project not found');
 
+    // Owners are treated as an implicit membership so permission checks do not
+    // depend on the join table staying in sync with ownership.
     if (project.ownerId === userId) return ProjectRole.OWNER;
 
     const member = await this.prisma.projectMember.findUnique({
@@ -85,6 +87,8 @@ export class ProjectsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
+    // Non-admin users only see projects they own or belong to. Search and sort
+    // are layered on top of that access scope, never instead of it.
     const accessWhere: Prisma.ProjectWhereInput =
       userRole === 'ADMIN'
         ? {}
@@ -151,6 +155,8 @@ export class ProjectsService {
       throw new ForbiddenException();
     }
 
+    // Use updateMany with the expected version to keep the write atomic. This
+    // closes the race between "read current version" and "write changes".
     const expectedVersion = requireIfMatchVersion(ifMatchHeader);
     const result = await this.prisma.project.updateMany({
       where: { id: projectId, version: expectedVersion },
@@ -281,6 +287,8 @@ export class ProjectsService {
     if (!project) throw new NotFoundException('Project not found');
 
     const roleToSet = dto.role ?? ProjectRole.MEMBER;
+    // Managers can expand execution capacity, but only owners can change the
+    // project's privilege structure.
     if (
       requesterRole === ProjectRole.MANAGER &&
       roleToSet !== ProjectRole.MEMBER
@@ -367,6 +375,8 @@ export class ProjectsService {
     });
     if (!target) throw new NotFoundException('Member not found');
 
+    // Managers cannot re-shape access control; they can only preserve MEMBER
+    // roles for collaborators they already supervise.
     if (requesterRole === ProjectRole.MANAGER) {
       if (target.role !== ProjectRole.MEMBER) throw new ForbiddenException();
       if (dto.role !== ProjectRole.MEMBER) throw new ForbiddenException();
@@ -456,6 +466,8 @@ export class ProjectsService {
     const project = await this.getProject(projectId);
     if (!project) throw new NotFoundException('Project not found');
 
+    // Owners must transfer ownership explicitly; "leave" is reserved for
+    // non-owner members so a project cannot become ownerless by accident.
     if (project.ownerId === userId) throw new ForbiddenException();
 
     const member = await this.prisma.projectMember.findUnique({
