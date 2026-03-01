@@ -52,6 +52,25 @@ Seed script creates these users (password for all: `123456`):
 - `user1@test.com` (USER)
 - `user2@test.com` (USER)
 
+## One-Command Local Start
+
+If Docker, Node 18+, and `pnpm` are already installed on the machine, a new contributor can bootstrap the full local stack with one command from the repo root:
+
+```bash
+pnpm setup:dev
+```
+
+What it does:
+
+- creates `apps/api/.env` and `apps/web/.env` from the example files if they do not exist
+- installs workspace dependencies
+- starts PostgreSQL and Redis via Docker Compose
+- applies Prisma migrations
+- seeds the database
+- starts the monorepo dev workspace
+
+This command is safe to re-run. Existing `.env` files are left untouched.
+
 ## Quick Start (Local)
 
 ### 1. Install dependencies

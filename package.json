@@ -4,6 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "setup:dev": "node scripts/setup-dev.mjs",
     "lint": "turbo run lint",
     "seed:workflow": "pnpm --filter api run seed:workflow",
     "seed:workflow:heavy": "pnpm --filter api run seed:workflow:heavy",
