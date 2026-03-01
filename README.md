@@ -1,102 +1,315 @@
 # TaskFlow
 
-Monorepo for a SaaS-style project management platform with a production-focused NestJS backend and a Next.js frontend workspace.
+Open-source team workspace for projects, tasks, ownership, audit visibility, and realtime progress.
 
-## Current Status
+![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square)
+![React](https://img.shields.io/badge/React-19-149ECA?style=flat-square)
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-Production_Ready-2496ED?style=flat-square)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=flat-square)
 
-- Backend core is implemented and tested:
-  - JWT auth with refresh rotation (`jti` hash storage)
-  - RBAC for projects, members, tasks, assignment
-  - Audit logs for business-significant actions
-  - Request correlation (`x-request-id`) with context metadata
-  - Unified exception format
-  - Strict request validation
-  - Pagination/filter/sort contracts for list endpoints (`items` + `meta`)
-- CI is configured via GitHub Actions (lint, typecheck, unit quality gates, build, e2e).
-- Frontend product layer is the next major phase.
+TaskFlow is a full-stack monorepo that combines a production-oriented NestJS API with a polished Next.js and React frontend. It is built to feel like a real product: secure auth, role-aware collaboration, concurrency-safe writes, audit trails, realtime updates, and a premium workspace UI.
+
+## Launch Vision
+
+TaskFlow is built for teams that move fast and still need structure. It turns scattered updates, task drift, and hidden ownership into one visible operating surface for delivery.
+
+It is a strong fit when you want:
+
+- clear project ownership
+- visible task movement
+- safe, concurrency-aware updates
+- traceable business actions
+- fast setup without enterprise bloat
+
+It is designed to work both as:
+
+- a usable internal team tool
+- a strong open-source portfolio project
+- a production-ready base for a hosted SaaS product
+
+## What Makes It Strong
+
+TaskFlow is not just a CRUD dashboard. It is opinionated around product-grade reliability:
+
+- writes can be retried safely
+- stale clients cannot silently overwrite newer data
+- important actions stay auditable
+- frontend screens are built to feel like a real product, not scaffolding
+- the repo already ships with a real production deployment path
+
+## Highlights
+
+- Full-stack monorepo with `NestJS`, `Next.js`, `Prisma`, `PostgreSQL`, and `Socket.IO`
+- Premium landing page and polished workspace UI
+- JWT auth with refresh rotation
+- Role-aware workspace and project permissions
+- Project and task management with assignment workflows
+- Optimistic concurrency control with `If-Match`
+- Idempotent write protection with `Idempotency-Key`
+- Hash-chained audit log for critical actions
+- Realtime project updates over Socket.IO
+- Optional AI assistant mode with zero-cost fallback
+- Local one-command bootstrap
+- Dockerized production deployment with nginx reverse proxy
+
+## Screenshots
+
+Full visual tour of the product surface, from landing to the signed-in workspace.
+
+### Landing
+
+The public front door: brand, product story, and the live product preview that makes the repository feel like a serious application from the first scroll.
+
+![TaskFlow Landing](./docs/screenshots/01-landing.png)
+
+### Workspace Overview
+
+The signed-in command surface: runtime telemetry, live workspace canvas, and recent activity in one place.
+
+![Workspace Overview](./docs/screenshots/02-workspace-overview.png)
+
+### Project Board
+
+The core collaboration screen: members, project activity, and a dense board view that keeps active work visible.
+
+![Project Details Board](./docs/screenshots/03-project-details.png)
+
+### Project Index
+
+Project creation and project discovery in one screen, including search, filters, and quick entry into active boards.
+
+![Project List](./docs/screenshots/04-project-list.png)
+
+### Task Detail and Roadmap
+
+Detailed task editing plus the roadmap canvas for planning, diagrams, notes, and visual task execution context.
+
+![Task Detail](./docs/screenshots/05-task-detail.png)
+
+### Workspace Task List
+
+Cross-project task visibility with filtering, version-aware status context, and fast entry back into the relevant board.
+
+![Task List](./docs/screenshots/06-task-list.png)
+
+### Audit Timeline
+
+Administrative event history with request tracing, actor visibility, and hash-chain metadata.
+
+![Audit Timeline](./docs/screenshots/07-audit-timeline.png)
+
+### Users Directory
+
+A workspace-wide people view showing role, project scope, and workload signals across the system.
+
+![Users List](./docs/screenshots/08-users-list.png)
+
+## Feature Set
+
+### Product and UX
+
+- Marketing landing page with premium product presentation
+- Dedicated auth flow for sign in and registration
+- Unified workspace shell with sidebar and topbar navigation
+- Responsive, product-style UI rather than starter-template layouts
+
+### Projects and Tasks
+
+- Create and manage projects
+- Add, remove, and re-role project members
+- Create, list, update, assign, unassign, and delete tasks
+- Workspace-wide task views
+- Task detail page with roadmap support
+
+### Security and Reliability
+
+- Access + refresh JWT flow
+- Refresh token rotation
+- Strict validation and throttling
+- `helmet` hardening
+- Production CORS allow-list
+- Optimistic concurrency for safe updates
+- Idempotent writes for retry-safe clients
+
+### Visibility and Collaboration
+
+- Workspace overview dashboard
+- Realtime project updates via Socket.IO
+- Notification and activity views
+- Tamper-evident audit records
+- Request correlation with `x-request-id`
+
+### Assistant
+
+- Workspace-aware assistant endpoints
+- Free `BASIC` mode using internal workspace data
+- Optional `LLM` mode through OpenAI-compatible configuration
+- Automatic fallback to local mode when provider is unavailable
+
+## Tech Stack
+
+### Backend
+
+- `NestJS 11`
+- `TypeScript`
+- `Prisma ORM`
+- `PostgreSQL`
+- `Socket.IO`
+- `Swagger / OpenAPI`
+- `Jest + Supertest`
+
+### Frontend
+
+- `Next.js 16` (App Router)
+- `React 19`
+- `TypeScript`
+- `socket.io-client`
+- `Playwright`
+
+### Infrastructure
+
+- `Docker`
+- `Docker Compose`
+- `nginx`
+- `pnpm`
+- `Turborepo`
 
 ## Monorepo Structure
 
 ```text
 apps/
-  api/        NestJS + Prisma + PostgreSQL
-  web/        Next.js (App Router)
+  api/        NestJS backend API
+  web/        Next.js frontend app
 packages/
   ui/         Shared UI primitives
   eslint-config/
   typescript-config/
+deploy/
+  nginx.prod.conf
 ```
 
-## Architecture (Backend)
+## Key Architecture
 
 ```mermaid
 flowchart LR
-  C[Client] -->|REST / JWT| API[NestJS API]
-  API --> Auth[Auth Module]
-  API --> Proj[Projects Module]
-  API --> Task[Tasks Module]
-  API --> User[Users Module]
-  Auth --> Prisma[Prisma Service]
-  Proj --> Prisma
-  Task --> Prisma
-  User --> Prisma
-  Prisma --> PG[(PostgreSQL)]
-  API -. future realtime .-> Redis[(Redis)]
+  Browser[Browser] --> Nginx[nginx]
+  Nginx --> Web[Next.js Web]
+  Nginx --> API[NestJS API]
+  API --> Prisma[Prisma]
+  Prisma --> Postgres[(PostgreSQL)]
+  API --> Realtime[Socket.IO Gateway]
+  Browser -. websocket .-> Realtime
+  API -. optional .-> LLM[OpenAI-Compatible Provider]
 ```
 
-## Demo Credentials
+## Quick Start
 
-Seed script creates these users (password for all: `123456`):
+### Prerequisites
 
-- `admin@test.com` (ADMIN)
-- `user1@test.com` (USER)
-- `user2@test.com` (USER)
+- `Node.js 18+`
+- `pnpm`
+- `Docker`
 
-## One-Command Local Start
+### One-Command Local Bootstrap
 
-If Docker, Node 18+, and `pnpm` are already installed on the machine, a new contributor can bootstrap the full local stack with one command from the repo root:
+From the repository root:
 
 ```bash
 pnpm setup:dev
 ```
 
-What it does:
+This command:
 
-- creates `apps/api/.env` and `apps/web/.env` from the example files if they do not exist
-- installs workspace dependencies
-- starts PostgreSQL and Redis via Docker Compose
+- creates missing local env files
+- installs dependencies
+- starts PostgreSQL and Redis
 - applies Prisma migrations
 - seeds the database
-- starts the monorepo dev workspace
+- starts the full development workspace
 
-This command is safe to re-run. Existing `.env` files are left untouched.
+This is the fastest way to get a fresh clone into a working state.
+
+### Local URLs
+
+- Web: `http://localhost:3002`
+- API: `http://localhost:3001/api`
+- Swagger: `http://localhost:3001/api/docs`
+
+## Demo Accounts
+
+Base seed includes:
+
+- `admin@test.com`
+- `user1@test.com`
+- `user2@test.com`
+
+Password for seeded demo users:
+
+- `123456`
+
+## Development Commands
+
+### Monorepo
+
+- `pnpm dev` - start the full development workspace
+- `pnpm build` - build all packages
+- `pnpm lint` - run lint across the monorepo
+- `pnpm check-types` - run type checks across the monorepo
+- `pnpm format` - run Prettier on supported files
+
+### Backend
+
+- `pnpm --filter api dev`
+- `pnpm --filter api build`
+- `pnpm --filter api start:prod`
+- `pnpm --filter api lint`
+- `pnpm --filter api test:unit`
+- `pnpm --filter api test:quality`
+- `pnpm --filter api test:e2e`
+- `pnpm --filter api test:e2e:ci`
+- `pnpm --filter api seed:workflow`
+- `pnpm --filter api seed:workflow:heavy`
+
+### Frontend
+
+- `pnpm --filter web dev`
+- `pnpm --filter web build`
+- `pnpm --filter web start`
+- `pnpm --filter web lint`
+- `pnpm --filter web check-types`
+- `pnpm --filter web test:e2e`
+- `pnpm --filter web test:e2e:ui`
+- `pnpm --filter web exec playwright install`
 
 ## Production Deployment
 
-The repository now includes a production deployment path built around Docker:
+TaskFlow includes a Dockerized production deployment path out of the box.
+
+Included files:
 
 - `apps/api/Dockerfile`
 - `apps/web/Dockerfile`
+- `apps/api/.env.production.example`
 - `docker-compose.prod.yml`
 - `deploy/nginx.prod.conf`
 
 ### Production Quick Start
 
-1. Copy the backend production env file:
+1. Create the backend production env file:
 
 ```bash
 cp apps/api/.env.production.example apps/api/.env.production
 ```
 
-2. Edit `apps/api/.env.production`:
+2. Edit `apps/api/.env.production` and set:
 
-- replace `JWT_ACCESS_SECRET`
-- replace `JWT_REFRESH_SECRET`
-- set `CORS_ORIGINS` to your public origin
-  - example: `https://taskflow.example.com`
-  - for a local production-style smoke test: `http://localhost`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `CORS_ORIGINS`
 
-3. Build and start the full stack:
+3. Start the production stack:
 
 ```bash
 pnpm prod:up
@@ -106,15 +319,13 @@ This starts:
 
 - PostgreSQL
 - Redis
-- NestJS API in production mode
-- Next.js web app in production mode
-- Nginx reverse proxy on port `80`
+- NestJS API
+- Next.js web app
+- nginx reverse proxy on port `80`
 
-The API container runs `prisma migrate deploy` automatically before it starts.
+This means a fresh server can boot the full product stack with one production command after env setup.
 
-### Public URLs
-
-After startup:
+### Production URLs
 
 - App: `http://YOUR_SERVER_IP/`
 - API: `http://YOUR_SERVER_IP/api`
@@ -122,133 +333,98 @@ After startup:
 
 ### Production Commands
 
-```bash
-pnpm prod:up
-pnpm prod:logs
-pnpm prod:down
-```
+- `pnpm prod:up`
+- `pnpm prod:logs`
+- `pnpm prod:down`
 
-### Production Notes
+## Testing
 
-- The web build is configured to use same-origin API calls via `/api`, so you do not need a separate frontend production env file for the default Docker deployment.
-- `docker-compose.prod.yml` currently uses the default PostgreSQL credentials `taskflow/taskflow` for simplicity. If you change them, update `DATABASE_URL` in `apps/api/.env.production` to match.
-- For a public internet deployment, put TLS in front of this stack (or extend the nginx container to serve HTTPS directly).
+### Backend
 
-## Quick Start (Local)
+- Unit tests for services and controllers
+- E2E coverage for core API workflows
+- Coverage thresholds on critical backend modules
 
-### 1. Install dependencies
+### Frontend
 
-```bash
-pnpm install
-```
+- Playwright end-to-end tests for real user flows
+- Navigation and key app paths tested through the browser layer
 
-### 2. Start infrastructure
+## Package Docs
 
-```bash
-docker compose up -d
-```
+For package-specific technical references:
 
-### 3. Configure backend env
+- Backend doc: [apps/api/README.md](./apps/api/README.md)
+- Frontend doc: [apps/web/README.md](./apps/web/README.md)
 
-```bash
-cp apps/api/.env.example apps/api/.env
-```
+## Use Cases
 
-### 4. Apply migrations + seed
+TaskFlow is a strong base for:
 
-```bash
-pnpm --filter api exec prisma migrate deploy
-pnpm --filter api exec prisma db seed
-```
+- internal team workspaces
+- startup MVPs for project management
+- portfolio-grade full-stack architecture showcases
+- open-source experimentation with auth, concurrency, auditability, and realtime collaboration
 
-### 5. Run backend
+## Roadmap
 
-```bash
-pnpm --filter api run dev
-```
+Potential next steps for the project:
 
-API base URL: `http://localhost:3001/api`  
-Swagger: `http://localhost:3001/api/docs`
+- richer notification center with read/unread state controls
+- expanded frontend unit/component test coverage
+- file attachments for tasks and projects
+- invitation flows by email
+- deeper assistant workflows and project summaries
+- deployment presets for TLS and cloud hosting
+- metrics and health dashboards for ops visibility
 
-## Demo Workflow Simulation
+## Open-Source Ready
 
-If tests cleared your data and you want a visually rich workspace again, you can recreate a full demo workflow with one command from the repo root:
+TaskFlow already has the pieces that make an open-source launch credible:
 
-```bash
-pnpm seed:workflow
-```
+- a real backend architecture
+- a polished frontend experience
+- tests across backend and frontend flows
+- production deployment documentation
+- package-level docs for both major apps
 
-For a much denser, showcase-ready dataset meant for demos, visual reviews, and "selling" the workspace experience:
+That makes this repository easy to understand, run locally, evaluate, and extend.
 
-```bash
-pnpm seed:workflow:heavy
-```
+## Contributing
 
-What this creates:
+If you want to extend TaskFlow:
 
-- 20 demo projects
-- ~140+ tasks with mixed statuses and priorities
-- multiple managers and users assigned across projects
-- roadmap data on a subset of tasks
-- audit activity (`PROJECT_CREATE`, `PROJECT_MEMBER_ADD`, `TASK_CREATE`, `TASK_UPDATE`, `TASK_ROADMAP_UPDATE`)
+1. Fork the repository
+2. Run `pnpm setup:dev`
+3. Create a feature branch
+4. Add tests for behavior changes
+5. Open a pull request
 
-The script is idempotent for its own demo dataset: it removes the previous demo batch and recreates it cleanly.
+Keeping contributions aligned with the current style matters:
 
-Heavy profile creates a significantly richer environment:
+- concise, useful comments
+- production-minded code paths
+- test coverage for critical logic
+- no unnecessary boilerplate
 
-- 42 projects
-- 500+ tasks
-- more managers and users
-- denser audit activity for notifications, activity, and canvas visualization
-- more roadmap-rich tasks for stronger task detail demos
+## License
 
-Implementation location:
+This project is currently private-source in structure but prepared to be published as open source.
 
-- `apps/api/scripts/demo-workspace/seed.ts`
+If you plan to publish it publicly, add the final license file you want to distribute with the repository, for example:
 
-Demo credentials after workflow seeding:
+- `MIT`
+- `Apache-2.0`
+- `GPL-3.0`
 
-- `admin@test.com` / `123456`
-- all generated `@demo.local` users also use `123456`
+## Status
 
-## Quality Commands
+TaskFlow already includes:
 
-From repo root:
+- a working backend API
+- a polished frontend application
+- automated tests
+- Dockerized production deployment
+- package-level technical documentation
 
-```bash
-pnpm lint
-pnpm check-types
-pnpm build
-pnpm --filter api run test:quality
-pnpm --filter api run test:e2e:ci
-```
-
-## CI
-
-Workflow: `.github/workflows/ci.yml`
-
-- `quality` job: lint + typecheck + unit quality gates + build
-- `e2e` job: postgres/redis services + prisma migrate + e2e
-
-## Backend API Notes
-
-List endpoints now return:
-
-```json
-{
-  "items": [],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 0,
-    "totalPages": 1
-  }
-}
-```
-
-Supported on key endpoints:
-
-- `GET /api/projects`
-- `GET /api/projects/:projectId/members`
-- `GET /api/projects/:projectId/tasks`
-- `GET /api/audit-logs` (ADMIN only)
+The next natural step is refinement, screenshots, and public open-source packaging.
