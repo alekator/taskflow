@@ -94,17 +94,17 @@ Cross-project task visibility with filtering, version-aware status context, and 
 
 ![Task List](./docs/screenshots/06-task-list.png)
 
-### Audit Timeline
-
-Administrative event history with request tracing, actor visibility, and hash-chain metadata.
-
-![Audit Timeline](./docs/screenshots/07-audit-timeline.png)
-
 ### Users Directory
 
 A workspace-wide people view showing role, project scope, and workload signals across the system.
 
 ![Users List](./docs/screenshots/08-users-list.png)
+
+### Audit Timeline
+
+Administrative event history with request tracing, actor visibility, and hash-chain metadata.
+
+![Audit Timeline](./docs/screenshots/07-audit-timeline.png)
 
 ## Feature Set
 
