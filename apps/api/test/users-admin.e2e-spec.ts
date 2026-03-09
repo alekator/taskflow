@@ -116,6 +116,85 @@ describe('Users workspace (e2e)', () => {
     });
   }
 
+  async function ensureWorkspaceContext() {
+    const workspace = await prisma.workspace.upsert({
+      where: { slug: 'users-e2e-workspace' },
+      update: { name: 'Users E2E Workspace' },
+      create: {
+        name: 'Users E2E Workspace',
+        slug: 'users-e2e-workspace',
+      },
+      select: { id: true },
+    });
+
+    const admin = await prisma.user.findUnique({
+      where: { email: creds.admin.email },
+      select: { id: true },
+    });
+    const manager = await prisma.user.findUnique({
+      where: { email: creds.manager.email },
+      select: { id: true },
+    });
+    const user = await prisma.user.findUnique({
+      where: { email: creds.user.email },
+      select: { id: true },
+    });
+
+    if (!admin || !manager || !user) {
+      throw new Error('Users missing');
+    }
+
+    await prisma.user.updateMany({
+      where: { id: { in: [admin.id, manager.id, user.id] } },
+      data: { defaultWorkspaceId: workspace.id },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: admin.id,
+        },
+      },
+      update: { role: 'ADMIN' },
+      create: {
+        workspaceId: workspace.id,
+        userId: admin.id,
+        role: 'ADMIN',
+      },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: manager.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: workspace.id,
+        userId: manager.id,
+        role: 'MEMBER',
+      },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        role: 'MEMBER',
+      },
+    });
+  }
+
   async function cleanDbKeepUsers() {
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
@@ -149,6 +228,8 @@ describe('Users workspace (e2e)', () => {
 
   beforeEach(async () => {
     await cleanDbKeepUsers();
+    await ensureUsers();
+    await ensureWorkspaceContext();
   });
 
   afterAll(async () => {
@@ -157,6 +238,8 @@ describe('Users workspace (e2e)', () => {
   });
 
   it('allows ADMIN to read users list with workload and project stats', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+
     const admin = await prisma.user.findUnique({
       where: { email: creds.admin.email },
       select: { id: true, defaultWorkspaceId: true },
@@ -217,7 +300,6 @@ describe('Users workspace (e2e)', () => {
       ],
     });
 
-    const adminLogin = await login(creds.admin.email, creds.admin.password);
     const res = await request(server)
       .get(api('/users'))
       .query({ search: creds.user.email })
