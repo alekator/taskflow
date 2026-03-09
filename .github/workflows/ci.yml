@@ -14,6 +14,9 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://taskflow:taskflow@localhost:5432/taskflow
 
     steps:
       - name: Checkout
