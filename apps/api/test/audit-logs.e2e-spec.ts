@@ -66,6 +66,33 @@ describe('Audit Logs (e2e)', () => {
     }
   }
 
+  async function alignUsersToWorkspace(
+    workspaceId: string,
+    users: Array<{ id: string; role: 'ADMIN' | 'MEMBER' }>,
+  ) {
+    await prisma.user.updateMany({
+      where: { id: { in: users.map((user) => user.id) } },
+      data: { defaultWorkspaceId: workspaceId },
+    });
+
+    for (const user of users) {
+      await prisma.workspaceMember.upsert({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: user.id,
+          },
+        },
+        update: { role: user.role },
+        create: {
+          workspaceId,
+          userId: user.id,
+          role: user.role,
+        },
+      });
+    }
+  }
+
   async function createProject(
     accessToken: string,
     name: string,
@@ -236,6 +263,21 @@ describe('Audit Logs (e2e)', () => {
       creds.manager.email,
       creds.manager.password,
     );
+    const admin = await prisma.user.findUnique({
+      where: { email: creds.admin.email },
+      select: { id: true, defaultWorkspaceId: true },
+    });
+    const manager = await prisma.user.findUnique({
+      where: { email: creds.manager.email },
+      select: { id: true },
+    });
+    if (!admin || !manager || !admin.defaultWorkspaceId) {
+      throw new Error('Users missing');
+    }
+    await alignUsersToWorkspace(admin.defaultWorkspaceId, [
+      { id: admin.id, role: 'ADMIN' },
+      { id: manager.id, role: 'MEMBER' },
+    ]);
 
     const managedProject = await createProject(
       adminLogin.accessToken,

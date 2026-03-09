@@ -116,17 +116,7 @@ describe('Users workspace (e2e)', () => {
     });
   }
 
-  async function ensureWorkspaceContext() {
-    const workspace = await prisma.workspace.upsert({
-      where: { slug: 'users-e2e-workspace' },
-      update: { name: 'Users E2E Workspace' },
-      create: {
-        name: 'Users E2E Workspace',
-        slug: 'users-e2e-workspace',
-      },
-      select: { id: true },
-    });
-
+  async function alignUsersToWorkspace(workspaceId: string) {
     const admin = await prisma.user.findUnique({
       where: { email: creds.admin.email },
       select: { id: true },
@@ -146,19 +136,19 @@ describe('Users workspace (e2e)', () => {
 
     await prisma.user.updateMany({
       where: { id: { in: [admin.id, manager.id, user.id] } },
-      data: { defaultWorkspaceId: workspace.id },
+      data: { defaultWorkspaceId: workspaceId },
     });
 
     await prisma.workspaceMember.upsert({
       where: {
         workspaceId_userId: {
-          workspaceId: workspace.id,
+          workspaceId,
           userId: admin.id,
         },
       },
       update: { role: 'ADMIN' },
       create: {
-        workspaceId: workspace.id,
+        workspaceId,
         userId: admin.id,
         role: 'ADMIN',
       },
@@ -167,13 +157,13 @@ describe('Users workspace (e2e)', () => {
     await prisma.workspaceMember.upsert({
       where: {
         workspaceId_userId: {
-          workspaceId: workspace.id,
+          workspaceId,
           userId: manager.id,
         },
       },
       update: { role: 'MEMBER' },
       create: {
-        workspaceId: workspace.id,
+        workspaceId,
         userId: manager.id,
         role: 'MEMBER',
       },
@@ -182,13 +172,13 @@ describe('Users workspace (e2e)', () => {
     await prisma.workspaceMember.upsert({
       where: {
         workspaceId_userId: {
-          workspaceId: workspace.id,
+          workspaceId,
           userId: user.id,
         },
       },
       update: { role: 'MEMBER' },
       create: {
-        workspaceId: workspace.id,
+        workspaceId,
         userId: user.id,
         role: 'MEMBER',
       },
@@ -229,7 +219,6 @@ describe('Users workspace (e2e)', () => {
   beforeEach(async () => {
     await cleanDbKeepUsers();
     await ensureUsers();
-    await ensureWorkspaceContext();
   });
 
   afterAll(async () => {
@@ -256,6 +245,7 @@ describe('Users workspace (e2e)', () => {
     if (!admin || !manager || !user || !admin.defaultWorkspaceId) {
       throw new Error('Users missing');
     }
+    await alignUsersToWorkspace(admin.defaultWorkspaceId);
 
     const project = await prisma.project.create({
       data: {
@@ -336,6 +326,14 @@ describe('Users workspace (e2e)', () => {
 
   it('supports filtering by role', async () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const admin = await prisma.user.findUnique({
+      where: { email: creds.admin.email },
+      select: { defaultWorkspaceId: true },
+    });
+    if (!admin?.defaultWorkspaceId) {
+      throw new Error('Admin workspace missing');
+    }
+    await alignUsersToWorkspace(admin.defaultWorkspaceId);
 
     const res = await request(server)
       .get(api('/users'))
