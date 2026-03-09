@@ -257,6 +257,13 @@ Copy from `apps/api/.env.example` for local development or `apps/api/.env.produc
 | `THROTTLE_LIMIT` | no | Global throttling limit |
 | `AUTH_THROTTLE_TTL_MS` | no | Auth throttling window |
 | `AUTH_THROTTLE_LIMIT` | no | Auth throttling limit |
+| `INVITE_EMAIL_PROVIDER` | no | `simulated` (default) or `smtp` |
+| `INVITE_EMAIL_FROM` | no | Sender identity for invitation emails |
+| `INVITE_SMTP_HOST` | if smtp | SMTP host for invite delivery |
+| `INVITE_SMTP_PORT` | if smtp | SMTP port (for example `587`) |
+| `INVITE_SMTP_SECURE` | if smtp | SMTP TLS mode (`true`/`false`) |
+| `INVITE_SMTP_USER` | no | SMTP username |
+| `INVITE_SMTP_PASS` | no | SMTP password |
 
 ## Local Development
 

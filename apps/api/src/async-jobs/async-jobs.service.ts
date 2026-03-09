@@ -3,6 +3,7 @@ import { AsyncJob, AsyncJobStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { InviteEmailDeliveryService } from './invite-email-delivery.service';
 
 type EnqueueJobInput = {
   type: string;
@@ -30,6 +31,7 @@ export class AsyncJobsService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly inviteEmailDelivery: InviteEmailDeliveryService,
   ) {}
 
   onModuleInit() {
@@ -234,8 +236,11 @@ export class AsyncJobsService implements OnModuleInit, OnModuleDestroy {
       throw new Error('Forced failure for retry flow');
     }
 
-    // Placeholder dispatch: real provider integration can replace this handler
-    // without changing enqueue contracts or retry semantics.
+    const deliveryResult = await this.inviteEmailDelivery.dispatch({
+      email,
+      inviteLink,
+    });
+
     await this.audit.log({
       action: 'WORKSPACE_INVITATION_EMAIL_DISPATCHED',
       actorUserId:
@@ -245,7 +250,8 @@ export class AsyncJobsService implements OnModuleInit, OnModuleDestroy {
       payload: {
         email,
         inviteLink,
-        delivery: 'simulated',
+        delivery: deliveryResult.delivery,
+        messageId: deliveryResult.messageId,
       },
     });
   }

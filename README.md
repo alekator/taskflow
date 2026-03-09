@@ -308,6 +308,7 @@ cp apps/api/.env.production.example apps/api/.env.production
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
 - `CORS_ORIGINS`
+- `INVITE_EMAIL_PROVIDER` (`simulated` or `smtp`)
 
 3. Start the production stack:
 
@@ -340,6 +341,22 @@ This means a fresh server can boot the full product stack with one production co
 - `pnpm ops:up`
 - `pnpm ops:logs`
 - `pnpm ops:down`
+
+### Invitation Email Delivery
+
+Workspace invitation dispatch supports two modes:
+
+- `INVITE_EMAIL_PROVIDER=simulated` (default, audit-only dispatch)
+- `INVITE_EMAIL_PROVIDER=smtp` (real email delivery)
+
+SMTP mode variables:
+
+- `INVITE_EMAIL_FROM`
+- `INVITE_SMTP_HOST`
+- `INVITE_SMTP_PORT`
+- `INVITE_SMTP_SECURE`
+- `INVITE_SMTP_USER`
+- `INVITE_SMTP_PASS`
 
 ### TLS Preset
 
@@ -381,6 +398,15 @@ Then open:
 - Prometheus: `http://YOUR_SERVER_IP:9090`
 - Grafana: `http://YOUR_SERVER_IP:3005` (default `admin` / `admin`)
 
+### Cloud Presets
+
+Starter presets are included in `deploy/cloud`:
+
+- Render blueprint: `deploy/cloud/render/render.yaml`
+- Fly.io configs: `deploy/cloud/fly/api.fly.toml`, `deploy/cloud/fly/web.fly.toml`
+- Railway baseline: `deploy/cloud/railway/railway.json`
+- Usage guide: `deploy/cloud/README.md`
+
 ## Testing
 
 ### Backend
@@ -417,7 +443,7 @@ Potential next steps for the project:
 - richer notification center with read/unread state controls
 - expanded frontend unit/component test coverage
 - file attachments for tasks and projects
-- invitation flows by email
+- invitation flows by email (SMTP and provider presets)
 - deeper assistant workflows and project summaries
 - deployment presets for TLS and cloud hosting
 - metrics and health dashboards for ops visibility

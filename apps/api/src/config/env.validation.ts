@@ -1,4 +1,5 @@
 type NodeEnv = 'development' | 'test' | 'production';
+type InviteEmailProvider = 'simulated' | 'smtp';
 
 type EnvMap = Record<string, unknown>;
 
@@ -55,6 +56,14 @@ function parseNodeEnv(env: EnvMap): NodeEnv {
     return raw;
   }
   throw new Error('NODE_ENV must be one of: development, test, production');
+}
+
+function parseInviteEmailProvider(env: EnvMap): InviteEmailProvider {
+  const raw = (asString(env.INVITE_EMAIL_PROVIDER) ?? 'simulated').toLowerCase();
+  if (raw === 'simulated' || raw === 'smtp') {
+    return raw;
+  }
+  throw new Error('INVITE_EMAIL_PROVIDER must be one of: simulated, smtp');
 }
 
 function parseCorsOrigins(raw?: string): string[] {
@@ -134,6 +143,14 @@ export function validateEnv(config: EnvMap) {
       4_000,
     ),
     JOBS_BATCH_SIZE: parseIntOrDefault(config, 'JOBS_BATCH_SIZE', 20),
+    INVITE_EMAIL_PROVIDER: parseInviteEmailProvider(config),
+    INVITE_EMAIL_FROM:
+      asString(config.INVITE_EMAIL_FROM) ?? 'TaskFlow <no-reply@taskflow.local>',
+    INVITE_SMTP_HOST: asString(config.INVITE_SMTP_HOST) ?? '',
+    INVITE_SMTP_PORT: parseIntOrDefault(config, 'INVITE_SMTP_PORT', 587),
+    INVITE_SMTP_SECURE: asString(config.INVITE_SMTP_SECURE) ?? 'false',
+    INVITE_SMTP_USER: asString(config.INVITE_SMTP_USER) ?? '',
+    INVITE_SMTP_PASS: asString(config.INVITE_SMTP_PASS) ?? '',
     ATTACHMENTS_ALLOWED_MIME:
       asString(config.ATTACHMENTS_ALLOWED_MIME) ??
       'image/png,image/jpeg,image/webp,application/pdf,text/plain',
@@ -143,6 +160,12 @@ export function validateEnv(config: EnvMap) {
     const origins = parseCorsOrigins(env.CORS_ORIGINS);
     if (origins.length === 0) {
       throw new Error('CORS_ORIGINS must be set in production');
+    }
+
+    if (env.INVITE_EMAIL_PROVIDER === 'smtp' && !env.INVITE_SMTP_HOST) {
+      throw new Error(
+        'INVITE_SMTP_HOST must be set when INVITE_EMAIL_PROVIDER=smtp',
+      );
     }
   }
 

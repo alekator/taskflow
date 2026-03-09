@@ -154,8 +154,19 @@ describe('Async Jobs (e2e)', () => {
         action: 'WORKSPACE_INVITATION_EMAIL_DISPATCHED',
         entityId: invitationId,
       },
+      select: {
+        id: true,
+        payload: true,
+      },
     });
     expect(dispatchedAudit).toBeTruthy();
+    const payload =
+      dispatchedAudit?.payload &&
+      typeof dispatchedAudit.payload === 'object' &&
+      !Array.isArray(dispatchedAudit.payload)
+        ? (dispatchedAudit.payload as Record<string, unknown>)
+        : null;
+    expect(payload?.delivery).toBe('simulated');
   });
 
   it('failed job is retried and eventually marked FAILED', async () => {
