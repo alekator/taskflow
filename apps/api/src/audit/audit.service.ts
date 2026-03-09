@@ -17,6 +17,18 @@ export type AuditLogInput = {
   payload?: Prisma.InputJsonValue | null;
 };
 
+type AuditVerifyIssue = {
+  index: number;
+  auditLogId: string;
+  reason: 'PREV_HASH_MISMATCH' | 'HASH_MISMATCH';
+};
+
+type AuditVerifyResult = {
+  ok: boolean;
+  checked: number;
+  issues: AuditVerifyIssue[];
+};
+
 @Injectable()
 export class AuditService {
   constructor(
@@ -157,6 +169,83 @@ export class AuditService {
     ]);
 
     return toPaginatedResult(items, page, limit, total);
+  }
+
+  async verifyIntegrity(requesterId: string): Promise<AuditVerifyResult> {
+    const requester = await this.prisma.user.findUnique({
+      where: { id: requesterId },
+      select: { role: true },
+    });
+
+    if (requester?.role !== UserRole.ADMIN) {
+      throw new ForbiddenException('Only ADMIN can verify audit integrity');
+    }
+
+    const chain = await this.prisma.auditLog.findMany({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        createdAt: true,
+        action: true,
+        actorUserId: true,
+        entityType: true,
+        entityId: true,
+        projectId: true,
+        requestId: true,
+        ip: true,
+        userAgent: true,
+        prevHash: true,
+        hash: true,
+        payload: true,
+      },
+    });
+
+    const issues: AuditVerifyIssue[] = [];
+    let expectedPrevHash: string | null = null;
+
+    for (let index = 0; index < chain.length; index += 1) {
+      const item = chain[index];
+
+      if (item.prevHash !== expectedPrevHash) {
+        issues.push({
+          index,
+          auditLogId: item.id,
+          reason: 'PREV_HASH_MISMATCH',
+        });
+      }
+
+      const expectedHash = this.computeHash({
+        createdAt: item.createdAt,
+        action: item.action,
+        actorUserId: item.actorUserId,
+        entityType: item.entityType,
+        entityId: item.entityId,
+        projectId: item.projectId,
+        requestId: item.requestId,
+        ip: item.ip,
+        userAgent: item.userAgent,
+        prevHash: item.prevHash,
+        payload: (item.payload ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
+      });
+
+      if (item.hash !== expectedHash) {
+        issues.push({
+          index,
+          auditLogId: item.id,
+          reason: 'HASH_MISMATCH',
+        });
+      }
+
+      expectedPrevHash = item.hash;
+    }
+
+    return {
+      ok: issues.length === 0,
+      checked: chain.length,
+      issues: issues.slice(0, 25),
+    };
   }
 
   private contains(value: string): Prisma.StringFilter {

@@ -106,6 +106,12 @@ describe('Audit Logs (e2e)', () => {
     return req;
   }
 
+  function verifyAudit(accessToken: string): SupertestTest {
+    return request(server)
+      .get(api('/admin/audit/verify'))
+      .set(authHeader(accessToken));
+  }
+
   beforeAll(async () => {
     const mod = await Test.createTestingModule({
       imports: [AppModule],
@@ -261,5 +267,64 @@ describe('Audit Logs (e2e)', () => {
     expect(
       body.items.some((item) => item.projectId === foreignProject.id),
     ).toBe(false);
+  });
+
+  it('ADMIN can verify hash-chain integrity for audit logs', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    await createProject(adminLogin.accessToken, 'Audit Verify Project');
+
+    const res = await verifyAudit(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      ok: boolean;
+      checked: number;
+      issues: Array<{ auditLogId: string; reason: string }>;
+    };
+
+    expect(body.ok).toBe(true);
+    expect(body.checked).toBeGreaterThanOrEqual(1);
+    expect(body.issues).toEqual([]);
+  });
+
+  it('verify endpoint detects tampered hash values', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    await createProject(adminLogin.accessToken, 'Audit Tamper Project');
+
+    const first = await prisma.auditLog.findFirst({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    if (!first) throw new Error('Expected at least one audit log entry');
+
+    await prisma.auditLog.update({
+      where: { id: first.id },
+      data: { hash: 'tampered-hash-value' },
+    });
+
+    const res = await verifyAudit(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      ok: boolean;
+      checked: number;
+      issues: Array<{ auditLogId: string; reason: string }>;
+    };
+
+    expect(body.ok).toBe(false);
+    expect(body.checked).toBeGreaterThanOrEqual(1);
+    expect(
+      body.issues.some(
+        (issue) =>
+          issue.auditLogId === first.id && issue.reason === 'HASH_MISMATCH',
+      ),
+    ).toBe(true);
+  });
+
+  it('verify endpoint is forbidden for non-admin users', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const managerLogin = await login(
+      creds.manager.email,
+      creds.manager.password,
+    );
+    await createProject(adminLogin.accessToken, 'Audit Verify Forbidden');
+
+    await verifyAudit(managerLogin.accessToken).expect(403);
   });
 });

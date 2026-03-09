@@ -17,3 +17,14 @@ export class AuditController {
     return this.audit.list(req.user.id, query);
   }
 }
+
+@Controller('admin/audit')
+@UseGuards(JwtAuthGuard)
+export class AdminAuditController {
+  constructor(private readonly audit: AuditService) {}
+
+  @Get('verify')
+  verify(@Req() req: AuthedRequest) {
+    return this.audit.verifyIntegrity(req.user.id);
+  }
+}
