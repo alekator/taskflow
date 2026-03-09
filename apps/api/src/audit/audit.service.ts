@@ -225,9 +225,7 @@ export class AuditService {
         ip: item.ip,
         userAgent: item.userAgent,
         prevHash: item.prevHash,
-        payload: (item.payload ?? undefined) as
-          | Prisma.InputJsonValue
-          | undefined,
+        payload: item.payload ?? undefined,
       });
 
       if (item.hash !== expectedHash) {

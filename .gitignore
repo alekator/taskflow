@@ -28,6 +28,7 @@ scripts/load/results/*.json
 out/
 build
 dist
+apps/web/storybook-static/
 
 
 # Debug
