@@ -83,6 +83,7 @@ describe('Notifications (e2e)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.notificationReceipt.deleteMany();
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.project.deleteMany();
@@ -90,6 +91,7 @@ describe('Notifications (e2e)', () => {
   });
 
   afterAll(async () => {
+    await prisma.notificationReceipt.deleteMany();
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.project.deleteMany();
@@ -132,10 +134,13 @@ describe('Notifications (e2e)', () => {
 
     const body = res.body as {
       items: Array<{
+        id: string;
         action: string;
         title: string;
         href: string;
         projectId: string | null;
+        isRead: boolean;
+        readAt: string | null;
       }>;
       meta: { total: number };
     };
@@ -152,5 +157,96 @@ describe('Notifications (e2e)', () => {
     expect(
       body.items.some((item) => item.projectId === project.id),
     ).toBe(true);
+    expect(body.items.every((item) => typeof item.isRead === 'boolean')).toBe(
+      true,
+    );
+  });
+
+  it('supports unread counter, mark-read, and mark-all-read flows', async () => {
+    const admin = await login(creds.admin.email, creds.admin.password);
+    const member = await login(creds.user1.email, creds.user1.password);
+
+    const projectRes = await request(server)
+      .post(api('/projects'))
+      .set(authHeader(admin.accessToken))
+      .send({ name: 'Notifications Read State', description: 'notify read' })
+      .expect(201);
+    const project = projectRes.body as { id: string };
+
+    await request(server)
+      .post(api(`/projects/${project.id}/members`))
+      .set(authHeader(admin.accessToken))
+      .send({ userId: member.user.id, role: ProjectRole.MEMBER })
+      .expect(201);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/tasks`))
+      .set(authHeader(admin.accessToken))
+      .send({
+        title: 'Read state task A',
+        status: TaskStatus.TODO,
+        assigneeId: member.user.id,
+      })
+      .expect(201);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/tasks`))
+      .set(authHeader(admin.accessToken))
+      .send({
+        title: 'Read state task B',
+        status: TaskStatus.TODO,
+        assigneeId: member.user.id,
+      })
+      .expect(201);
+
+    const initialUnread = await request(server)
+      .get(api('/notifications/unread-count'))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+    const initialUnreadBody = initialUnread.body as { unreadCount: number };
+    expect(initialUnreadBody.unreadCount).toBeGreaterThan(0);
+
+    const listRes = await request(server)
+      .get(api('/notifications'))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+    const listBody = listRes.body as {
+      items: Array<{ id: string; isRead: boolean }>;
+    };
+    expect(listBody.items.length).toBeGreaterThan(0);
+
+    const firstNotificationId = listBody.items[0].id;
+
+    await request(server)
+      .patch(api(`/notifications/${firstNotificationId}/read`))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+
+    const unreadAfterSingle = await request(server)
+      .get(api('/notifications/unread-count'))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+    const unreadAfterSingleBody = unreadAfterSingle.body as { unreadCount: number };
+    expect(unreadAfterSingleBody.unreadCount).toBeLessThanOrEqual(
+      initialUnreadBody.unreadCount,
+    );
+
+    await request(server)
+      .patch(api('/notifications/read-all'))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+
+    const unreadAfterAll = await request(server)
+      .get(api('/notifications/unread-count'))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+    expect((unreadAfterAll.body as { unreadCount: number }).unreadCount).toBe(0);
+
+    const unreadOnlyList = await request(server)
+      .get(api('/notifications'))
+      .query({ unreadOnly: true })
+      .set(authHeader(member.accessToken))
+      .expect(200);
+    expect((unreadOnlyList.body as { items: unknown[] }).items).toEqual([]);
   });
 });

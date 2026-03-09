@@ -31,6 +31,8 @@ type NotificationItem = {
   actorUserId: string | null;
   requestId: string | null;
   isOwnAction: boolean;
+  isRead: boolean;
+  readAt: Date | null;
 };
 
 type RelatedProject = { id: string; name: string };
@@ -70,7 +72,13 @@ export class NotificationsService {
       workspaceId,
     );
 
-    const where = this.buildWhere(userId, userRole, accessibleProjectIds);
+    const where = this.buildWhere(
+      userId,
+      userRole,
+      accessibleProjectIds,
+      query.type,
+      query.unreadOnly === true ? userId : undefined,
+    );
 
     const [total, logs] = await this.prisma.$transaction([
       this.prisma.auditLog.count({ where }),
@@ -89,6 +97,11 @@ export class NotificationsService {
           requestId: true,
           payload: true,
           createdAt: true,
+          notificationReceipts: {
+            where: { userId },
+            select: { readAt: true },
+            take: 1,
+          },
         },
       }),
     ]);
@@ -129,6 +142,8 @@ export class NotificationsService {
     userId: string,
     userRole: string,
     accessibleProjectIds: string[],
+    type?: ListNotificationsQueryDto['type'],
+    unreadForUserId?: string,
   ): Prisma.AuditLogWhereInput {
     // Non-admin users only see project activity inside their workspace scope,
     // plus account-related records that directly concern them.
@@ -139,16 +154,45 @@ export class NotificationsService {
           ? { projectId: { in: accessibleProjectIds } }
           : { id: '__no_project_scope__' };
 
-    return {
-      action: {
-        notIn: ['AUTH_REFRESH'],
-      },
+    const actionFilter: Prisma.StringFilter = {
+      notIn: ['AUTH_REFRESH'],
+    };
+
+    const where: Prisma.AuditLogWhereInput = {
+      action: actionFilter,
       OR: [
         projectScope,
         { actorUserId: userId },
         { entityType: 'user', entityId: userId },
       ],
     };
+
+    if (type) {
+      if (type === 'task') {
+        actionFilter.startsWith = 'TASK_';
+      } else if (type === 'project') {
+        actionFilter.startsWith = 'PROJECT_';
+      } else if (type === 'security') {
+        actionFilter.startsWith = 'AUTH_';
+      } else if (type === 'workspace') {
+        where.NOT = [
+          { action: { startsWith: 'TASK_' } },
+          { action: { startsWith: 'PROJECT_' } },
+          { action: { startsWith: 'AUTH_' } },
+        ];
+      }
+    }
+
+    if (unreadForUserId) {
+      where.notificationReceipts = {
+        none: {
+          userId: unreadForUserId,
+          readAt: { not: null },
+        },
+      };
+    }
+
+    return where;
   }
 
   private async loadRelatedEntities(logs: AuditLogRow[]) {
@@ -217,7 +261,7 @@ export class NotificationsService {
   }
 
   private toNotification(
-    log: AuditLogRow,
+    log: AuditLogRow & { notificationReceipts?: Array<{ readAt: Date | null }> },
     currentUserId: string,
     related: RelatedEntities,
   ): NotificationItem {
@@ -246,6 +290,8 @@ export class NotificationsService {
       status: this.readPayloadString(payload, 'status'),
     });
 
+    const readAt = log.notificationReceipts?.[0]?.readAt ?? null;
+
     return {
       id: log.id,
       type: this.typeForAction(log.action),
@@ -260,7 +306,124 @@ export class NotificationsService {
       actorUserId: log.actorUserId,
       requestId: log.requestId,
       isOwnAction: log.actorUserId === currentUserId,
+      isRead: readAt != null,
+      readAt,
     };
+  }
+
+  async unreadCount(userId: string, userRole: string) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const accessibleProjectIds = await this.getAccessibleProjectIds(
+      userId,
+      userRole,
+      workspaceId,
+    );
+
+    const where = this.buildWhere(
+      userId,
+      userRole,
+      accessibleProjectIds,
+      undefined,
+      userId,
+    );
+
+    const total = await this.prisma.auditLog.count({ where });
+    return { unreadCount: total };
+  }
+
+  async markRead(userId: string, userRole: string, notificationId: string) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const accessibleProjectIds = await this.getAccessibleProjectIds(
+      userId,
+      userRole,
+      workspaceId,
+    );
+
+    const visible = await this.prisma.auditLog.findFirst({
+      where: {
+        id: notificationId,
+        ...this.buildWhere(userId, userRole, accessibleProjectIds),
+      },
+      select: { id: true },
+    });
+
+    if (!visible) {
+      return { ok: false, reason: 'NOT_FOUND' as const };
+    }
+
+    const now = new Date();
+    await this.prisma.notificationReceipt.upsert({
+      where: {
+        userId_auditLogId: {
+          userId,
+          auditLogId: notificationId,
+        },
+      },
+      update: {
+        readAt: now,
+      },
+      create: {
+        userId,
+        auditLogId: notificationId,
+        readAt: now,
+      },
+    });
+
+    return { ok: true };
+  }
+
+  async markAllRead(userId: string, userRole: string) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const accessibleProjectIds = await this.getAccessibleProjectIds(
+      userId,
+      userRole,
+      workspaceId,
+    );
+
+    const toMark = await this.prisma.auditLog.findMany({
+      where: this.buildWhere(
+        userId,
+        userRole,
+        accessibleProjectIds,
+        undefined,
+        userId,
+      ),
+      select: { id: true },
+      take: 500,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+
+    if (toMark.length === 0) {
+      return { ok: true, marked: 0 };
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.notificationReceipt.createMany({
+        data: toMark.map((row) => ({
+          userId,
+          auditLogId: row.id,
+          readAt: now,
+        })),
+        skipDuplicates: true,
+      }),
+      this.prisma.notificationReceipt.updateMany({
+        where: {
+          userId,
+          auditLogId: { in: toMark.map((row) => row.id) },
+          OR: [{ readAt: null }],
+        },
+        data: { readAt: now },
+      }),
+    ]);
+
+    return { ok: true, marked: toMark.length };
   }
 
   private describeLog(input: {

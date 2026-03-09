@@ -72,6 +72,7 @@ model User {
   assistantMessages AssistantMessage[]
   invitationsSent WorkspaceInvitation[] @relation("WorkspaceInvitationSender")
   taskAttachmentsUploaded TaskAttachment[]
+  notificationReceipts NotificationReceipt[]
 
   @@index([defaultWorkspaceId])
 }
@@ -277,6 +278,7 @@ model AuditLog {
   @@index([requestId])
   @@index([prevHash])
   @@index([hash])
+  notificationReceipts NotificationReceipt[]
 }
 
 enum IdempotencyStatus {
@@ -351,4 +353,20 @@ model TaskAttachment {
   @@index([taskId, status])
   @@index([uploadedByUserId, createdAt])
   @@index([createdAt])
+}
+
+model NotificationReceipt {
+  id         String   @id @default(cuid())
+  userId     String
+  auditLogId String
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  auditLog AuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, auditLogId])
+  @@index([userId, readAt])
+  @@index([auditLogId])
 }

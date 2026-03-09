@@ -10,7 +10,10 @@ import {
   type AssistantMessageMode,
 } from "../../lib/assistant/api";
 import {
+  getUnreadNotificationsCount,
   listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   type NotificationItem,
 } from "../../lib/notifications/api";
 import { getErrorDetails } from "../../lib/errors";
@@ -26,12 +29,6 @@ function modeLabel(mode: AssistantMessageMode) {
   return mode === "LLM" ? "LLM" : "Basic";
 }
 
-function notificationsSeenStorageKey(userId: string) {
-  return `taskflow.notifications.seen.${userId}`;
-}
-
-const MAX_SEEN_NOTIFICATIONS = 300;
-
 export function WorkspaceAssistant() {
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
@@ -44,8 +41,7 @@ export function WorkspaceAssistant() {
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [seenNotificationIds, setSeenNotificationIds] = useState<string[]>([]);
-  const [seenNotificationsReady, setSeenNotificationsReady] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
   const [helperMode, setHelperMode] = useState<AssistantMessageMode>("BASIC");
   const [llmEnabled, setLlmEnabled] = useState(false);
@@ -59,14 +55,6 @@ export function WorkspaceAssistant() {
     () => draft.trim().length > 0 && !sending,
     [draft, sending],
   );
-  const seenNotificationIdsSet = useMemo(
-    () => new Set(seenNotificationIds),
-    [seenNotificationIds],
-  );
-  const unreadCount = useMemo(() => {
-    return notifications.filter((item) => !seenNotificationIdsSet.has(item.id)).length;
-  }, [notifications, seenNotificationIdsSet]);
-
   const loadNotifications = useCallback(async (silent = false) => {
     if (!silent) {
       setLoadingNotifications(true);
@@ -83,6 +71,15 @@ export function WorkspaceAssistant() {
       if (!silent) {
         setLoadingNotifications(false);
       }
+    }
+  }, []);
+
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const res = await getUnreadNotificationsCount();
+      setUnreadCount(res.unreadCount);
+    } catch {
+      // Keep existing badge value if unread endpoint fails transiently.
     }
   }, []);
 
@@ -123,58 +120,15 @@ export function WorkspaceAssistant() {
     if (!isAuthenticated) return;
 
     void loadNotifications(true);
+    void loadUnreadCount();
 
     const timer = window.setInterval(() => {
       void loadNotifications(true);
+      void loadUnreadCount();
     }, 15000);
 
     return () => window.clearInterval(timer);
-  }, [isAuthenticated, loadNotifications]);
-
-  useEffect(() => {
-    if (!user) {
-      setSeenNotificationIds([]);
-      setSeenNotificationsReady(false);
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(
-        notificationsSeenStorageKey(user.id),
-      );
-      if (!raw) {
-        setSeenNotificationIds([]);
-        setSeenNotificationsReady(true);
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) {
-        setSeenNotificationIds([]);
-        setSeenNotificationsReady(true);
-        return;
-      }
-
-      setSeenNotificationIds(
-        parsed
-          .filter((value): value is string => typeof value === "string")
-          .slice(0, MAX_SEEN_NOTIFICATIONS),
-      );
-      setSeenNotificationsReady(true);
-    } catch {
-      setSeenNotificationIds([]);
-      setSeenNotificationsReady(true);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!user || !seenNotificationsReady) return;
-
-    window.localStorage.setItem(
-      notificationsSeenStorageKey(user.id),
-      JSON.stringify(seenNotificationIds.slice(0, MAX_SEEN_NOTIFICATIONS)),
-    );
-  }, [seenNotificationIds, seenNotificationsReady, user]);
+  }, [isAuthenticated, loadNotifications, loadUnreadCount]);
 
   useEffect(() => {
     if (!open) return;
@@ -224,11 +178,37 @@ export function WorkspaceAssistant() {
     return "notifications-item-workspace";
   };
 
-  const markNotificationSeen = (notificationId: string) => {
-    setSeenNotificationIds((prev) => {
-      if (prev.includes(notificationId)) return prev;
-      return [notificationId, ...prev].slice(0, MAX_SEEN_NOTIFICATIONS);
-    });
+  const markNotificationSeen = useCallback(async (notificationId: string) => {
+    const current = notifications.find((item) => item.id === notificationId);
+    if (!current || current.isRead) return;
+
+    setNotifications((prev) =>
+      prev.map((item) =>
+        item.id === notificationId
+          ? { ...item, isRead: true, readAt: new Date().toISOString() }
+          : item,
+      ),
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
+    try {
+      await markNotificationRead(notificationId);
+    } catch {
+      // Keep optimistic read state to avoid flicker; next refresh will reconcile.
+    }
+  }, [notifications]);
+
+  const onMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) =>
+        prev.map((item) => ({ ...item, isRead: true, readAt: item.readAt ?? new Date().toISOString() })),
+      );
+      setUnreadCount(0);
+    } catch (err) {
+      const details = getErrorDetails(err);
+      setNotificationsError(details.message);
+    }
   };
 
   return (
@@ -287,13 +267,22 @@ export function WorkspaceAssistant() {
               Recent changes across tasks, projects, and workspace activity
             </p>
           </div>
-          <button
-            type="button"
-            className="button button-ghost button-compact"
-            onClick={() => setNotificationsOpen(false)}
-          >
-            Hide
-          </button>
+          <div className="assistant-drawer-actions">
+            <button
+              type="button"
+              className="button button-ghost button-compact"
+              onClick={() => void onMarkAllRead()}
+            >
+              Mark all read
+            </button>
+            <button
+              type="button"
+              className="button button-ghost button-compact"
+              onClick={() => setNotificationsOpen(false)}
+            >
+              Hide
+            </button>
+          </div>
         </header>
 
         <div className="notifications-feed" ref={notificationsRef}>
@@ -309,11 +298,11 @@ export function WorkspaceAssistant() {
             <button
               key={item.id}
               type="button"
-              className={`notifications-item ${notificationToneClass(item)}${item.isOwnAction ? " notifications-item-own" : ""}${seenNotificationIdsSet.has(item.id) ? " notifications-item-seen" : ""}`}
+              className={`notifications-item ${notificationToneClass(item)}${item.isOwnAction ? " notifications-item-own" : ""}${item.isRead ? " notifications-item-seen" : ""}`}
               data-testid="notification-item"
-              onMouseEnter={() => markNotificationSeen(item.id)}
+              onMouseEnter={() => void markNotificationSeen(item.id)}
               onClick={() => {
-                markNotificationSeen(item.id);
+                void markNotificationSeen(item.id);
                 setNotificationsOpen(false);
                 router.push(item.href);
               }}
