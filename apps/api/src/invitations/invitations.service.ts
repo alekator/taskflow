@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, WorkspaceInvitationStatus, WorkspaceMemberRole } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
+import { AsyncJobsService } from '../async-jobs/async-jobs.service';
 import { AuditService } from '../audit/audit.service';
 import { toPaginatedResult } from '../common/pagination';
 import { WorkspaceAccessService } from '../common/workspace-access.service';
@@ -25,6 +26,7 @@ export class InvitationsService {
     private readonly prisma: PrismaService,
     private readonly workspaceAccess: WorkspaceAccessService,
     private readonly audit: AuditService,
+    private readonly asyncJobs: AsyncJobsService,
   ) {}
 
   private requireAdminWorkspaceRole(role: WorkspaceMemberRole) {
@@ -85,6 +87,8 @@ export class InvitationsService {
     const expiresInDays = dto.expiresInDays ?? 7;
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
 
+    const inviteLink = this.buildInviteLink(rawToken);
+
     const invite = await this.prisma.workspaceInvitation.create({
       data: {
         workspaceId: access.workspaceId,
@@ -104,6 +108,19 @@ export class InvitationsService {
       },
     });
 
+    await this.asyncJobs.enqueue({
+      type: 'SEND_WORKSPACE_INVITE_EMAIL',
+      dedupeKey: `invite-email:${invite.id}`,
+      payload: {
+        invitationId: invite.id,
+        workspaceId: access.workspaceId,
+        email: invite.email,
+        inviteLink,
+        requestedByUserId: requesterId,
+      },
+      maxAttempts: 6,
+    });
+
     await this.audit.log({
       action: 'WORKSPACE_INVITATION_CREATE',
       actorUserId: requesterId,
@@ -120,7 +137,7 @@ export class InvitationsService {
     return {
       ...invite,
       inviteToken: rawToken,
-      inviteLink: this.buildInviteLink(rawToken),
+      inviteLink,
     };
   }
 

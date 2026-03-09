@@ -43,6 +43,13 @@ enum AttachmentStatus {
   DELETED
 }
 
+enum AsyncJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 enum ProjectRole {
   OWNER
   MANAGER
@@ -353,6 +360,26 @@ model TaskAttachment {
   @@index([taskId, status])
   @@index([uploadedByUserId, createdAt])
   @@index([createdAt])
+}
+
+model AsyncJob {
+  id          String         @id @default(cuid())
+  type        String
+  status      AsyncJobStatus @default(PENDING)
+  payload     Json
+  attempts    Int            @default(0)
+  maxAttempts Int            @default(5)
+  runAt       DateTime       @default(now())
+  lastError   String?
+  lockedAt    DateTime?
+  lockedBy    String?
+  processedAt DateTime?
+  dedupeKey   String?        @unique
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status, runAt])
+  @@index([type, status])
 }
 
 model NotificationReceipt {

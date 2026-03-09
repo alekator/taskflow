@@ -118,6 +118,12 @@ export function validateEnv(config: EnvMap) {
       0,
       2,
     ),
+    JOBS_POLL_INTERVAL_MS: parseIntOrDefault(
+      config,
+      'JOBS_POLL_INTERVAL_MS',
+      4_000,
+    ),
+    JOBS_BATCH_SIZE: parseIntOrDefault(config, 'JOBS_BATCH_SIZE', 20),
   };
 
   if (nodeEnv === 'production') {

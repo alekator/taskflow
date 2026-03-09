@@ -28,6 +28,7 @@ import { InvitationsModule } from './invitations/invitations.module';
 import { BillingModule } from './billing/billing.module';
 import { StorageModule } from './storage/storage.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { AsyncJobsModule } from './async-jobs/async-jobs.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     }),
     RequestContextModule,
     WorkspaceAccessModule,
+    AsyncJobsModule,
     StorageModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
