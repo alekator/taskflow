@@ -26,6 +26,8 @@ import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 import { NotificationsModule } from './notifications/notifications.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { BillingModule } from './billing/billing.module';
+import { StorageModule } from './storage/storage.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { BillingModule } from './billing/billing.module';
     }),
     RequestContextModule,
     WorkspaceAccessModule,
+    StorageModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -53,6 +56,7 @@ import { BillingModule } from './billing/billing.module';
     NotificationsModule,
     InvitationsModule,
     BillingModule,
+    AttachmentsModule,
     RealtimeModule,
     AuthModule,
     UsersModule,
