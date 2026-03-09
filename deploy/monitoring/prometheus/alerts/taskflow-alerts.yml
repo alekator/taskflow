@@ -1,0 +1,58 @@
+groups:
+  - name: taskflow-api-alerts
+    rules:
+      - alert: TaskFlowApiDown
+        expr: up{job="taskflow-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: taskflow-api
+        annotations:
+          summary: "TaskFlow API target is down"
+          description: "Prometheus cannot scrape taskflow-api for more than 2 minutes."
+
+      - alert: TaskFlowHttp5xxSpike
+        expr: |
+          (
+            rate(taskflow_http_request_errors_total[5m])
+            /
+            clamp_min(rate(taskflow_http_requests_total[5m]), 0.001)
+          ) > 0.05
+          and rate(taskflow_http_requests_total[5m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: taskflow-api
+        annotations:
+          summary: "TaskFlow API 5xx error ratio is high"
+          description: "5xx ratio is above 5% for at least 10 minutes."
+
+      - alert: TaskFlowHighP95Latency
+        expr: taskflow_http_request_duration_p95_ms > 800
+        for: 10m
+        labels:
+          severity: warning
+          service: taskflow-api
+        annotations:
+          summary: "TaskFlow API p95 latency is elevated"
+          description: "p95 latency is above 800ms for at least 10 minutes."
+
+      - alert: TaskFlowFailedAsyncJobsRecent
+        expr: taskflow_async_jobs_failed_recent > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: taskflow-api
+        annotations:
+          summary: "TaskFlow async jobs are failing"
+          description: "There are failed async jobs in the last 15 minutes."
+
+      - alert: TaskFlowDatabaseDegraded
+        expr: taskflow_database_connected == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: taskflow-api
+        annotations:
+          summary: "TaskFlow database connectivity is degraded"
+          description: "API healthcheck reports database as unavailable or not configured."

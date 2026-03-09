@@ -4,6 +4,9 @@ describe('AppService', () => {
   let service: AppService;
   const prisma = {
     $queryRawUnsafe: jest.fn(),
+    asyncJob: {
+      count: jest.fn(),
+    },
   };
   const observability = {
     getHttpSnapshot: jest.fn(),
@@ -21,6 +24,7 @@ describe('AppService', () => {
     observability.renderPrometheusMetrics.mockReturnValue(
       'taskflow_http_requests_total 0',
     );
+    prisma.asyncJob.count.mockResolvedValue(0);
     service = new AppService(prisma as never, observability as never);
   });
 
@@ -70,8 +74,14 @@ describe('AppService', () => {
     expect(result.services.database).toBe('CONNECTED');
   });
 
-  it('metrics returns prometheus text from observability service', () => {
-    const text = service.metrics();
+  it('metrics returns prometheus text from observability service', async () => {
+    prisma.$queryRawUnsafe.mockResolvedValue([{ '?column?': 1 }]);
+    process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
+    prisma.asyncJob.count.mockResolvedValue(2);
+
+    const text = await service.metrics();
     expect(text).toContain('taskflow_http_requests_total');
+    expect(text).toContain('taskflow_database_connected 1');
+    expect(text).toContain('taskflow_async_jobs_failed_recent 2');
   });
 });

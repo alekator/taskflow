@@ -13,7 +13,7 @@ describe('AppController', () => {
       health: jest.fn().mockResolvedValue({ status: 'ok' }),
       live: jest.fn().mockReturnValue({ status: 'ok' }),
       ready: jest.fn().mockResolvedValue({ status: 'ready' }),
-      metrics: jest.fn().mockReturnValue('taskflow_http_requests_total 0'),
+      metrics: jest.fn().mockResolvedValue('taskflow_http_requests_total 0'),
     };
     appController = new AppController(appService as AppService);
   });
@@ -38,8 +38,10 @@ describe('AppController', () => {
     expect(appService.ready).toHaveBeenCalledTimes(1);
   });
 
-  it('metrics delegates to AppService', () => {
-    expect(appController.metrics()).toBe('taskflow_http_requests_total 0');
+  it('metrics delegates to AppService', async () => {
+    await expect(appController.metrics()).resolves.toBe(
+      'taskflow_http_requests_total 0',
+    );
     expect(appService.metrics).toHaveBeenCalledTimes(1);
   });
 });

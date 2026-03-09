@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AsyncJobStatus } from '@prisma/client';
 import { ObservabilityService } from './observability/observability.service';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -94,7 +95,46 @@ export class AppService {
     };
   }
 
-  metrics() {
-    return this.observability.renderPrometheusMetrics();
+  private async getFailedJobsRecentCount(): Promise<number> {
+    if (!process.env.DATABASE_URL) {
+      return 0;
+    }
+
+    try {
+      const since = new Date(Date.now() - 15 * 60 * 1000);
+      return await this.prisma.asyncJob.count({
+        where: {
+          status: AsyncJobStatus.FAILED,
+          updatedAt: { gte: since },
+        },
+      });
+    } catch {
+      return 0;
+    }
+  }
+
+  async metrics() {
+    const base = this.observability.renderPrometheusMetrics();
+    const database = await this.getDatabaseStatus();
+    const failedJobsRecent = await this.getFailedJobsRecentCount();
+
+    const dbConnected = database.status === 'CONNECTED' ? 1 : 0;
+    const dbLatencyMs = database.latencyMs ?? 0;
+
+    return [
+      base,
+      '',
+      '# HELP taskflow_database_connected Database connectivity status (1=connected, 0=degraded)',
+      '# TYPE taskflow_database_connected gauge',
+      `taskflow_database_connected ${dbConnected}`,
+      '',
+      '# HELP taskflow_database_latency_ms Database healthcheck latency in milliseconds',
+      '# TYPE taskflow_database_latency_ms gauge',
+      `taskflow_database_latency_ms ${dbLatencyMs}`,
+      '',
+      '# HELP taskflow_async_jobs_failed_recent Number of failed async jobs updated in last 15 minutes',
+      '# TYPE taskflow_async_jobs_failed_recent gauge',
+      `taskflow_async_jobs_failed_recent ${failedJobsRecent}`,
+    ].join('\n');
   }
 }
