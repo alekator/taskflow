@@ -16,6 +16,9 @@
     "seed:workflow": "pnpm --filter api run seed:workflow",
     "seed:workflow:heavy": "pnpm --filter api run seed:workflow:heavy",
     "test:web:e2e": "pnpm --filter web test:e2e",
+    "bench:api:autocannon": "node scripts/load/run-autocannon.mjs",
+    "bench:api:k6": "k6 run scripts/load/k6-api-smoke.js",
+    "bench:api": "pnpm bench:api:autocannon",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
   },
