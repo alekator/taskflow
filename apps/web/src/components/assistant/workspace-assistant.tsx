@@ -41,6 +41,7 @@ export function WorkspaceAssistant() {
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsFilter, setNotificationsFilter] = useState<"all" | "unread">("all");
   const [unreadCount, setUnreadCount] = useState(0);
   const [draft, setDraft] = useState("");
   const [helperMode, setHelperMode] = useState<AssistantMessageMode>("BASIC");
@@ -144,10 +145,6 @@ export function WorkspaceAssistant() {
     container.scrollTop = 0;
   }, [notifications, notificationsOpen]);
 
-  if (!isAuthenticated || !user) {
-    return null;
-  }
-
   const onSend = async () => {
     const text = draft.trim();
     if (!text) return;
@@ -198,6 +195,14 @@ export function WorkspaceAssistant() {
     }
   }, [notifications]);
 
+  const visibleNotifications = useMemo(
+    () =>
+      notificationsFilter === "unread"
+        ? notifications.filter((item) => !item.isRead)
+        : notifications,
+    [notifications, notificationsFilter],
+  );
+
   const onMarkAllRead = async () => {
     try {
       await markAllNotificationsRead();
@@ -210,6 +215,10 @@ export function WorkspaceAssistant() {
       setNotificationsError(details.message);
     }
   };
+
+  if (!isAuthenticated || !user) {
+    return null;
+  }
 
   return (
     <>
@@ -278,6 +287,22 @@ export function WorkspaceAssistant() {
             <button
               type="button"
               className="button button-ghost button-compact"
+              data-testid="notifications-filter-all"
+              onClick={() => setNotificationsFilter("all")}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              className="button button-ghost button-compact"
+              data-testid="notifications-filter-unread"
+              onClick={() => setNotificationsFilter("unread")}
+            >
+              Unread
+            </button>
+            <button
+              type="button"
+              className="button button-ghost button-compact"
               onClick={() => setNotificationsOpen(false)}
             >
               Hide
@@ -288,13 +313,19 @@ export function WorkspaceAssistant() {
         <div className="notifications-feed" ref={notificationsRef}>
           {loadingNotifications ? <p className="meta">Loading notifications...</p> : null}
           {notificationsError ? <p className="error-text">{notificationsError}</p> : null}
-          {!loadingNotifications && !notificationsError && notifications.length === 0 ? (
+          {!loadingNotifications &&
+          !notificationsError &&
+          visibleNotifications.length === 0 ? (
             <div className="assistant-empty">
-              <p>No notifications yet. Relevant task and project changes will appear here.</p>
+              <p>
+                {notificationsFilter === "unread"
+                  ? "No unread notifications."
+                  : "No notifications yet. Relevant task and project changes will appear here."}
+              </p>
             </div>
           ) : null}
 
-          {notifications.map((item) => (
+          {visibleNotifications.map((item) => (
             <button
               key={item.id}
               type="button"
