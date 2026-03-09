@@ -28,6 +28,8 @@ export class AuthService {
   private readonly adminInviteCode: string | null;
   private readonly mainWorkspaceSlug = 'main';
   private readonly mainWorkspaceId = 'ws_main';
+  private readonly loginMaxAttempts: number;
+  private readonly loginLockMinutes: number;
 
   constructor(
     private prisma: PrismaService,
@@ -46,6 +48,19 @@ export class AuthService {
     this.managerInviteCode =
       process.env.AUTH_MANAGER_INVITE_CODE?.trim() ?? null;
     this.adminInviteCode = process.env.AUTH_ADMIN_INVITE_CODE?.trim() ?? null;
+
+    const maxAttempts = Number.parseInt(
+      process.env.AUTH_LOGIN_MAX_ATTEMPTS ?? '5',
+      10,
+    );
+    const lockMinutes = Number.parseInt(
+      process.env.AUTH_LOGIN_LOCK_MINUTES ?? '15',
+      10,
+    );
+    this.loginMaxAttempts =
+      Number.isInteger(maxAttempts) && maxAttempts > 0 ? maxAttempts : 5;
+    this.loginLockMinutes =
+      Number.isInteger(lockMinutes) && lockMinutes > 0 ? lockMinutes : 15;
   }
 
   private workspaceRoleForUser(role: UserRole): WorkspaceMemberRole {
@@ -293,12 +308,67 @@ export class AuthService {
         name: true,
         passwordHash: true,
         defaultWorkspaceId: true,
+        failedLoginAttempts: true,
+        lockedUntil: true,
       },
     });
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await this.audit.log({
+        action: 'AUTH_LOGIN_LOCKED',
+        actorUserId: user.id,
+        entityType: 'user',
+        entityId: user.id,
+      });
+      throw new ForbiddenException(
+        'Too many failed login attempts. Try again later.',
+      );
+    }
+
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('Invalid credentials');
+    if (!ok) {
+      const nextFailedAttempts = user.failedLoginAttempts + 1;
+      const shouldLock = nextFailedAttempts >= this.loginMaxAttempts;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: shouldLock ? 0 : nextFailedAttempts,
+          lockedUntil: shouldLock
+            ? new Date(Date.now() + this.loginLockMinutes * 60_000)
+            : null,
+        },
+      });
+
+      await this.audit.log({
+        action: shouldLock ? 'AUTH_LOGIN_LOCKED' : 'AUTH_LOGIN_FAILED',
+        actorUserId: user.id,
+        entityType: 'user',
+        entityId: user.id,
+        payload: {
+          failedAttempts: nextFailedAttempts,
+          lockMinutes: shouldLock ? this.loginLockMinutes : undefined,
+        },
+      });
+
+      if (shouldLock) {
+        throw new ForbiddenException(
+          'Too many failed login attempts. Try again later.',
+        );
+      }
+
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+    }
 
     await this.ensureAnyWorkspaceMembership(user);
 

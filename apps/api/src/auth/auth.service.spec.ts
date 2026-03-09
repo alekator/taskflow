@@ -79,6 +79,8 @@ describe('AuthService', () => {
       name: 'User',
       passwordHash: 'hash',
       defaultWorkspaceId: 'ws_main',
+      failedLoginAttempts: 0,
+      lockedUntil: null,
     });
     (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
     (jwt.sign as jest.Mock)
@@ -261,5 +263,57 @@ describe('AuthService', () => {
       where: { id: 'u1' },
       data: { refreshJtiHash: null },
     });
+  });
+
+  it('login throws ForbiddenException for locked account', async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'u1@test.com',
+      role: UserRole.USER,
+      name: 'User',
+      passwordHash: 'hash',
+      defaultWorkspaceId: 'ws_main',
+      failedLoginAttempts: 0,
+      lockedUntil: new Date(Date.now() + 60_000),
+    });
+
+    await expect(service.login('u1@test.com', '123456')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('login locks account after repeated failed attempts', async () => {
+    process.env.AUTH_LOGIN_MAX_ATTEMPTS = '3';
+    process.env.AUTH_LOGIN_LOCK_MINUTES = '5';
+    service = new AuthService(
+      prisma as never,
+      jwt,
+      audit as never,
+      invitations as never,
+    );
+
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'u1@test.com',
+      role: UserRole.USER,
+      name: 'User',
+      passwordHash: 'hash',
+      defaultWorkspaceId: 'ws_main',
+      failedLoginAttempts: 2,
+      lockedUntil: null,
+    });
+    (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
+    prisma.user.update.mockResolvedValueOnce({});
+
+    await expect(service.login('u1@test.com', 'badpass')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          failedLoginAttempts: 0,
+        }),
+      }),
+    );
   });
 });

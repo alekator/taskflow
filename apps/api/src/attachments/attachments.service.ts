@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -31,6 +32,32 @@ export class AttachmentsService {
     private readonly storage: ObjectStorageService,
     private readonly audit: AuditService,
   ) {}
+
+  private getAllowedMimeTypes() {
+    const raw =
+      process.env.ATTACHMENTS_ALLOWED_MIME ??
+      'image/png,image/jpeg,image/webp,application/pdf,text/plain';
+    return raw
+      .split(',')
+      .map((v) => v.trim().toLowerCase())
+      .filter((v) => v.length > 0);
+  }
+
+  private validateUploadInput(dto: CreateTaskAttachmentUploadDto) {
+    const fileName = dto.fileName.trim();
+    if (fileName.includes('/') || fileName.includes('\\')) {
+      throw new BadRequestException('Invalid attachment file name');
+    }
+    if (/[\x00-\x1F]/.test(fileName)) {
+      throw new BadRequestException('Invalid attachment file name');
+    }
+
+    const mimeType = dto.mimeType.trim().toLowerCase();
+    const allowed = this.getAllowedMimeTypes();
+    if (!allowed.includes(mimeType)) {
+      throw new BadRequestException('Attachment mime type is not allowed');
+    }
+  }
 
   private hashToken(token: string) {
     return createHash('sha256').update(token).digest('hex');
@@ -106,6 +133,7 @@ export class AttachmentsService {
     taskId: string,
     dto: CreateTaskAttachmentUploadDto,
   ) {
+    this.validateUploadInput(dto);
     const access = await this.getTaskAccess(userId, userRole, taskId);
 
     const uploadToken = randomBytes(24).toString('base64url');

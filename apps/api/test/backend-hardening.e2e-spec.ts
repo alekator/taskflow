@@ -26,6 +26,13 @@ describe('Backend hardening (e2e)', () => {
     role: 'ADMIN' as const,
   };
 
+  const bruteUser = {
+    email: 'security.lock@test.com',
+    password: '123456',
+    name: 'Security Lock User',
+    role: 'USER' as const,
+  };
+
   const api = (path: string) => `/api${path}`;
 
   function authHeader(accessToken: string) {
@@ -57,14 +64,37 @@ describe('Backend hardening (e2e)', () => {
         passwordHash,
       },
     });
+
+    const brutePasswordHash = await bcrypt.hash(bruteUser.password, 10);
+    await prisma.user.upsert({
+      where: { email: bruteUser.email },
+      update: {
+        name: bruteUser.name,
+        role: bruteUser.role,
+        passwordHash: brutePasswordHash,
+      },
+      create: {
+        email: bruteUser.email,
+        name: bruteUser.name,
+        role: bruteUser.role,
+        passwordHash: brutePasswordHash,
+      },
+    });
   }
 
   async function cleanDbKeepUsers() {
     await prisma.idempotencyRecord.deleteMany();
+    await prisma.taskAttachment.deleteMany();
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.project.deleteMany();
     await prisma.auditLog.deleteMany();
+    await prisma.user.updateMany({
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      },
+    });
   }
 
   beforeAll(async () => {
@@ -189,5 +219,67 @@ describe('Backend hardening (e2e)', () => {
       .set('If-Match', String(body.version))
       .send({ description: 'v3' })
       .expect(412);
+  });
+
+  it('locks account after repeated failed login attempts and allows after lock expires', async () => {
+    const maxAttempts = Number(process.env.AUTH_LOGIN_MAX_ATTEMPTS ?? '5');
+
+    for (let i = 0; i < maxAttempts - 1; i += 1) {
+      await request(server)
+        .post(api('/auth/login'))
+        .send({ email: bruteUser.email, password: 'wrong-password' })
+        .expect(401);
+    }
+
+    await request(server)
+      .post(api('/auth/login'))
+      .send({ email: bruteUser.email, password: 'wrong-password' })
+      .expect(403);
+
+    await request(server)
+      .post(api('/auth/login'))
+      .send({ email: bruteUser.email, password: bruteUser.password })
+      .expect(403);
+
+    await prisma.user.update({
+      where: { email: bruteUser.email },
+      data: {
+        lockedUntil: new Date(Date.now() - 60_000),
+      },
+    });
+
+    await request(server)
+      .post(api('/auth/login'))
+      .send({ email: bruteUser.email, password: bruteUser.password })
+      .expect(201);
+  });
+
+  it('rejects attachment upload intent for disallowed mime type', async () => {
+    process.env.ATTACHMENTS_ALLOWED_MIME = 'application/pdf,text/plain';
+
+    const adminLogin = await login(admin.email, admin.password);
+    const project = await request(server)
+      .post(api('/projects'))
+      .set(authHeader(adminLogin.accessToken))
+      .send({ name: 'Hardening Attachments', description: 'mime guard' })
+      .expect(201);
+    const projectId = (project.body as { id: string }).id;
+
+    const task = await request(server)
+      .post(api(`/projects/${projectId}/tasks`))
+      .set(authHeader(adminLogin.accessToken))
+      .send({ title: 'Attachment hardening task' })
+      .expect(201);
+    const taskId = (task.body as { id: string }).id;
+
+    await request(server)
+      .post(api(`/tasks/${taskId}/attachments/uploads`))
+      .set(authHeader(adminLogin.accessToken))
+      .send({
+        fileName: 'script.sh',
+        mimeType: 'application/x-sh',
+        sizeBytes: 128,
+      })
+      .expect(400);
   });
 });

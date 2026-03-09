@@ -91,6 +91,16 @@ export function validateEnv(config: EnvMap) {
       'AUTH_THROTTLE_LIMIT',
       nodeEnv === 'test' ? 999_999 : 10,
     ),
+    AUTH_LOGIN_MAX_ATTEMPTS: parseIntOrDefault(
+      config,
+      'AUTH_LOGIN_MAX_ATTEMPTS',
+      5,
+    ),
+    AUTH_LOGIN_LOCK_MINUTES: parseIntOrDefault(
+      config,
+      'AUTH_LOGIN_LOCK_MINUTES',
+      15,
+    ),
     ASSISTANT_OPENAI_API_KEY: asString(config.ASSISTANT_OPENAI_API_KEY) ?? '',
     ASSISTANT_OPENAI_MODEL:
       asString(config.ASSISTANT_OPENAI_MODEL) ?? 'gpt-4o-mini',
@@ -124,6 +134,9 @@ export function validateEnv(config: EnvMap) {
       4_000,
     ),
     JOBS_BATCH_SIZE: parseIntOrDefault(config, 'JOBS_BATCH_SIZE', 20),
+    ATTACHMENTS_ALLOWED_MIME:
+      asString(config.ATTACHMENTS_ALLOWED_MIME) ??
+      'image/png,image/jpeg,image/webp,application/pdf,text/plain',
   };
 
   if (nodeEnv === 'production') {

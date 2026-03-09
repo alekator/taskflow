@@ -68,6 +68,8 @@ model User {
 
   refreshTokenHash String?
   refreshJtiHash String?
+  failedLoginAttempts Int @default(0)
+  lockedUntil DateTime?
 
   defaultWorkspace Workspace? @relation("UserDefaultWorkspace", fields: [defaultWorkspaceId], references: [id], onDelete: SetNull)
   projectsOwned  Project[]       @relation("ProjectOwner")
