@@ -154,9 +154,7 @@ describe('Notifications (e2e)', () => {
           item.href === `/app/tasks/${task.id}`,
       ),
     ).toBe(true);
-    expect(
-      body.items.some((item) => item.projectId === project.id),
-    ).toBe(true);
+    expect(body.items.some((item) => item.projectId === project.id)).toBe(true);
     expect(body.items.every((item) => typeof item.isRead === 'boolean')).toBe(
       true,
     );
@@ -226,7 +224,9 @@ describe('Notifications (e2e)', () => {
       .get(api('/notifications/unread-count'))
       .set(authHeader(member.accessToken))
       .expect(200);
-    const unreadAfterSingleBody = unreadAfterSingle.body as { unreadCount: number };
+    const unreadAfterSingleBody = unreadAfterSingle.body as {
+      unreadCount: number;
+    };
     expect(unreadAfterSingleBody.unreadCount).toBeLessThanOrEqual(
       initialUnreadBody.unreadCount,
     );
@@ -240,7 +240,9 @@ describe('Notifications (e2e)', () => {
       .get(api('/notifications/unread-count'))
       .set(authHeader(member.accessToken))
       .expect(200);
-    expect((unreadAfterAll.body as { unreadCount: number }).unreadCount).toBe(0);
+    expect((unreadAfterAll.body as { unreadCount: number }).unreadCount).toBe(
+      0,
+    );
 
     const unreadOnlyList = await request(server)
       .get(api('/notifications'))

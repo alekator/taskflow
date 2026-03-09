@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import nodemailer, { Transporter } from 'nodemailer';
+import { createTransport } from 'nodemailer';
 
 type InviteEmailDispatchInput = {
   email: string;
@@ -12,7 +12,27 @@ type InviteEmailDispatchResult = {
   messageId?: string;
 };
 
-type MailTransport = Pick<Transporter, 'sendMail'>;
+type MailTransport = {
+  sendMail(payload: {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html: string;
+  }): Promise<{ messageId?: string }>;
+};
+
+type MailerModule = {
+  createTransport(payload: {
+    host: string;
+    port: number;
+    secure: boolean;
+    auth?: {
+      user: string;
+      pass: string;
+    };
+  }): MailTransport;
+};
 
 @Injectable()
 export class InviteEmailDeliveryService {
@@ -61,7 +81,7 @@ export class InviteEmailDeliveryService {
       throw new Error('INVITE_SMTP_PORT must be a positive integer');
     }
 
-    this.transporter = nodemailer.createTransport({
+    this.transporter = (createTransport as MailerModule['createTransport'])({
       host: host.trim(),
       port,
       secure,
@@ -74,16 +94,19 @@ export class InviteEmailDeliveryService {
           : undefined,
     });
 
-    return this.transporter as MailTransport;
+    return this.transporter;
   }
 
-  async dispatch(input: InviteEmailDispatchInput): Promise<InviteEmailDispatchResult> {
+  async dispatch(
+    input: InviteEmailDispatchInput,
+  ): Promise<InviteEmailDispatchResult> {
     if (this.getProvider() !== 'smtp') {
       return { delivery: 'simulated' };
     }
 
     const from =
-      this.config.get<string>('INVITE_EMAIL_FROM') ?? 'TaskFlow <no-reply@taskflow.local>';
+      this.config.get<string>('INVITE_EMAIL_FROM') ??
+      'TaskFlow <no-reply@taskflow.local>';
     const subject = 'You were invited to TaskFlow workspace';
     const text = [
       'You received an invitation to join a TaskFlow workspace.',
@@ -105,12 +128,7 @@ export class InviteEmailDeliveryService {
     return {
       delivery: 'smtp',
       messageId:
-        typeof info === 'object' &&
-        info &&
-        'messageId' in info &&
-        typeof info.messageId === 'string'
-          ? info.messageId
-          : undefined,
+        typeof info.messageId === 'string' ? info.messageId : undefined,
     };
   }
 }

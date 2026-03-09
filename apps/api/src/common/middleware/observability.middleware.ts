@@ -10,16 +10,13 @@ export class ObservabilityMiddleware implements NestMiddleware {
     const startedAt = process.hrtime.bigint();
 
     res.on('finish', () => {
-      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      const route =
-        req.route?.path ??
-        req.path ??
-        req.originalUrl.split('?')[0] ??
-        '/unknown';
+      const durationMs =
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      const route = req.path || req.originalUrl.split('?')[0] || '/unknown';
 
       this.observability.recordHttpRequest({
         method: req.method,
-        route: String(route),
+        route,
         statusCode: res.statusCode,
         durationMs,
       });

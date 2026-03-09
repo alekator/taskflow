@@ -193,7 +193,9 @@ describe('Async Jobs (e2e)', () => {
       .post(api('/async-jobs/run-once'))
       .set(authHeader(admin.accessToken))
       .expect(201);
-    expect((first.body as { retried: number }).retried).toBeGreaterThanOrEqual(1);
+    expect((first.body as { retried: number }).retried).toBeGreaterThanOrEqual(
+      1,
+    );
 
     await prisma.asyncJob.update({
       where: { id: forced.id },
@@ -204,7 +206,9 @@ describe('Async Jobs (e2e)', () => {
       .post(api('/async-jobs/run-once'))
       .set(authHeader(admin.accessToken))
       .expect(201);
-    expect((second.body as { failed: number }).failed).toBeGreaterThanOrEqual(1);
+    expect((second.body as { failed: number }).failed).toBeGreaterThanOrEqual(
+      1,
+    );
 
     const final = await prisma.asyncJob.findUnique({
       where: { id: forced.id },

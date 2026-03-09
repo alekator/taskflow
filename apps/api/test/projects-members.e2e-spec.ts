@@ -297,7 +297,9 @@ describe('Projects / Members (e2e)', () => {
 
   it('projects: ADMIN list is scoped to current workspace', async () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
-    await createProject(adminLogin.accessToken, { name: 'Main Workspace Project' });
+    await createProject(adminLogin.accessToken, {
+      name: 'Main Workspace Project',
+    });
 
     const otherWorkspace = await prisma.workspace.create({
       data: {
@@ -441,7 +443,9 @@ describe('Projects / Members (e2e)', () => {
       },
     });
 
-    await addMember(adminLogin.accessToken, project.id, outsider.id).expect(403);
+    await addMember(adminLogin.accessToken, project.id, outsider.id).expect(
+      403,
+    );
   });
 
   it('members: OWNER cannot add owner as member (should be 409 or 4xx)', async () => {

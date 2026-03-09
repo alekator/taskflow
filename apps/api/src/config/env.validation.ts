@@ -59,7 +59,9 @@ function parseNodeEnv(env: EnvMap): NodeEnv {
 }
 
 function parseInviteEmailProvider(env: EnvMap): InviteEmailProvider {
-  const raw = (asString(env.INVITE_EMAIL_PROVIDER) ?? 'simulated').toLowerCase();
+  const raw = (
+    asString(env.INVITE_EMAIL_PROVIDER) ?? 'simulated'
+  ).toLowerCase();
   if (raw === 'simulated' || raw === 'smtp') {
     return raw;
   }
@@ -145,7 +147,8 @@ export function validateEnv(config: EnvMap) {
     JOBS_BATCH_SIZE: parseIntOrDefault(config, 'JOBS_BATCH_SIZE', 20),
     INVITE_EMAIL_PROVIDER: parseInviteEmailProvider(config),
     INVITE_EMAIL_FROM:
-      asString(config.INVITE_EMAIL_FROM) ?? 'TaskFlow <no-reply@taskflow.local>',
+      asString(config.INVITE_EMAIL_FROM) ??
+      'TaskFlow <no-reply@taskflow.local>',
     INVITE_SMTP_HOST: asString(config.INVITE_SMTP_HOST) ?? '',
     INVITE_SMTP_PORT: parseIntOrDefault(config, 'INVITE_SMTP_PORT', 587),
     INVITE_SMTP_SECURE: asString(config.INVITE_SMTP_SECURE) ?? 'false',

@@ -137,9 +137,8 @@ export class TasksService {
     userRole: string,
     query: ListTasksQueryDto,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -180,9 +179,8 @@ export class TasksService {
     userRole: string,
     taskId: string,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const task = await this.prisma.task.findFirst({
       where: {
         AND: [
@@ -257,9 +255,8 @@ export class TasksService {
   }
 
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.getMyProjectRole(userId, workspaceId, projectId);
     // Members can only create work for themselves. Owners/managers may set an
     // assignee explicitly, but only after membership validation.
@@ -303,9 +300,8 @@ export class TasksService {
   }
 
   async list(userId: string, projectId: string, query: ListTasksQueryDto) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const page = query.page ?? 1;
@@ -340,9 +336,8 @@ export class TasksService {
     ifMatchHeader: string | undefined,
     dto: UpdateTaskDto,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const task = await this.prisma.task.findFirst({
@@ -414,9 +409,8 @@ export class TasksService {
     taskId: string,
     ifMatchHeader?: string,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const task = await this.prisma.task.findFirst({
@@ -463,9 +457,8 @@ export class TasksService {
     taskId: string,
     assigneeId: string,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
@@ -505,9 +498,8 @@ export class TasksService {
   }
 
   async unassign(userId: string, projectId: string, taskId: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {

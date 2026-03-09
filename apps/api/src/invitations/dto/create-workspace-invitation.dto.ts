@@ -1,12 +1,5 @@
 import { WorkspaceMemberRole } from '@prisma/client';
-import {
-  IsEmail,
-  IsEnum,
-  IsInt,
-  IsOptional,
-  Max,
-  Min,
-} from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class CreateWorkspaceInvitationDto {
   @IsEmail()

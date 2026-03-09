@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/request-user.type';
@@ -14,10 +23,7 @@ export class InvitationsController {
   constructor(private readonly invitations: InvitationsService) {}
 
   @Post()
-  create(
-    @Req() req: AuthedRequest,
-    @Body() dto: CreateWorkspaceInvitationDto,
-  ) {
+  create(@Req() req: AuthedRequest, @Body() dto: CreateWorkspaceInvitationDto) {
     return this.invitations.create(req.user.id, dto);
   }
 

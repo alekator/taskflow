@@ -77,9 +77,11 @@ import { ObservabilityModule } from './observability/observability.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestContextMiddleware, ObservabilityMiddleware).forRoutes({
-      path: '*path',
-      method: RequestMethod.ALL,
-    });
+    consumer
+      .apply(RequestContextMiddleware, ObservabilityMiddleware)
+      .forRoutes({
+        path: '*path',
+        method: RequestMethod.ALL,
+      });
   }
 }

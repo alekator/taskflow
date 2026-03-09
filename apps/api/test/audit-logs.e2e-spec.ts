@@ -205,12 +205,12 @@ describe('Audit Logs (e2e)', () => {
     };
 
     expect(body.meta.total).toBeGreaterThanOrEqual(1);
-    expect(
-      body.items.every((item) => item.action.includes('PROJECT_')),
-    ).toBe(true);
-    expect(
-      body.items.every((item) => item.entityType === 'project'),
-    ).toBe(true);
+    expect(body.items.every((item) => item.action.includes('PROJECT_'))).toBe(
+      true,
+    );
+    expect(body.items.every((item) => item.entityType === 'project')).toBe(
+      true,
+    );
     expect(
       body.items.every((item) => item.actorUserId === adminLogin.user.id),
     ).toBe(true);

@@ -8,7 +8,12 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
-  imports: [PassportModule, JwtModule.register({}), AuditModule, InvitationsModule],
+  imports: [
+    PassportModule,
+    JwtModule.register({}),
+    AuditModule,
+    InvitationsModule,
+  ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
   exports: [AuthService],

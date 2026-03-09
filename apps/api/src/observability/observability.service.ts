@@ -59,7 +59,8 @@ export class ObservabilityService {
 
     const sorted = [...this.durationWindow].sort((a, b) => a - b);
     const p95Index = sorted.length > 0 ? Math.floor(sorted.length * 0.95) : 0;
-    const p95Ms = sorted.length > 0 ? sorted[Math.min(sorted.length - 1, p95Index)] : 0;
+    const p95Ms =
+      sorted.length > 0 ? sorted[Math.min(sorted.length - 1, p95Index)] : 0;
 
     return {
       total: this.totalRequests,

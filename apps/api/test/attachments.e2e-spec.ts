@@ -84,7 +84,10 @@ describe('Attachments (e2e)', () => {
     await prisma.project.deleteMany();
   }
 
-  async function createProject(accessToken: string, name = 'Attachments Project') {
+  async function createProject(
+    accessToken: string,
+    name = 'Attachments Project',
+  ) {
     const res = await request(server)
       .post(api('/projects'))
       .set('Authorization', `Bearer ${accessToken}`)
@@ -93,7 +96,11 @@ describe('Attachments (e2e)', () => {
     return res.body as { id: string };
   }
 
-  async function createTask(accessToken: string, projectId: string, title = 'Task for attachments') {
+  async function createTask(
+    accessToken: string,
+    projectId: string,
+    title = 'Task for attachments',
+  ) {
     const res = await request(server)
       .post(api(`/projects/${projectId}/tasks`))
       .set('Authorization', `Bearer ${accessToken}`)
@@ -177,13 +184,21 @@ describe('Attachments (e2e)', () => {
     expect(uploadBody.upload.uploadUrl).toContain(uploadBody.attachment.id);
 
     await request(server)
-      .post(api(`/tasks/${task.id}/attachments/${uploadBody.attachment.id}/complete`))
+      .post(
+        api(
+          `/tasks/${task.id}/attachments/${uploadBody.attachment.id}/complete`,
+        ),
+      )
       .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
       .send({ uploadToken: 'wrong-token-value' })
       .expect(403);
 
     await request(server)
-      .post(api(`/tasks/${task.id}/attachments/${uploadBody.attachment.id}/complete`))
+      .post(
+        api(
+          `/tasks/${task.id}/attachments/${uploadBody.attachment.id}/complete`,
+        ),
+      )
       .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
       .send({ uploadToken: uploadBody.uploadToken })
       .expect(201);
@@ -215,9 +230,12 @@ describe('Attachments (e2e)', () => {
   });
 
   it('hides attachment endpoints from non-members', async () => {
-    const { user1, user2 } = await ensureUsers();
+    const { user1 } = await ensureUsers();
     const adminLogin = await login(creds.admin.email, creds.admin.password);
-    const project = await createProject(adminLogin.accessToken, 'Attachment Visibility');
+    const project = await createProject(
+      adminLogin.accessToken,
+      'Attachment Visibility',
+    );
 
     await request(server)
       .post(api(`/projects/${project.id}/members`))
@@ -227,7 +245,11 @@ describe('Attachments (e2e)', () => {
 
     const memberLogin = await login(creds.user1.email, creds.user1.password);
     const outsiderLogin = await login(creds.user2.email, creds.user2.password);
-    const task = await createTask(memberLogin.accessToken, project.id, 'Task visibility');
+    const task = await createTask(
+      memberLogin.accessToken,
+      project.id,
+      'Task visibility',
+    );
 
     await request(server)
       .get(api(`/tasks/${task.id}/attachments`))
@@ -240,7 +262,10 @@ describe('Attachments (e2e)', () => {
     const adminLogin = await login(creds.admin.email, creds.admin.password);
     const memberOneLogin = await login(creds.user1.email, creds.user1.password);
     const memberTwoLogin = await login(creds.user2.email, creds.user2.password);
-    const project = await createProject(adminLogin.accessToken, 'Project Attachments');
+    const project = await createProject(
+      adminLogin.accessToken,
+      'Project Attachments',
+    );
 
     await request(server)
       .post(api(`/projects/${project.id}/members`))
@@ -292,12 +317,16 @@ describe('Attachments (e2e)', () => {
     expect(listedItems[0].status).toBe('AVAILABLE');
 
     await request(server)
-      .delete(api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`))
+      .delete(
+        api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`),
+      )
       .set('Authorization', `Bearer ${memberTwoLogin.accessToken}`)
       .expect(403);
 
     await request(server)
-      .delete(api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`))
+      .delete(
+        api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`),
+      )
       .set('Authorization', `Bearer ${adminLogin.accessToken}`)
       .expect(200);
 

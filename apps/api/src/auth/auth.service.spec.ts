@@ -58,7 +58,9 @@ describe('AuthService', () => {
     );
     prisma.workspace.upsert.mockResolvedValue({ id: 'ws_main' });
     prisma.workspaceMember.upsert.mockResolvedValue({});
-    prisma.workspaceMember.findFirst.mockResolvedValue({ workspaceId: 'ws_main' });
+    prisma.workspaceMember.findFirst.mockResolvedValue({
+      workspaceId: 'ws_main',
+    });
     invitations.consumeForRegistration.mockResolvedValue(null);
     invitations.accept.mockResolvedValue(undefined);
   });
@@ -305,15 +307,17 @@ describe('AuthService', () => {
     (bcrypt.compare as jest.Mock).mockResolvedValueOnce(false);
     prisma.user.update.mockResolvedValueOnce({});
 
-    await expect(service.login('u1@test.com', 'badpass')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          failedLoginAttempts: 0,
-        }),
-      }),
-    );
+    await expect(
+      service.login('u1@test.com', 'badpass'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.user.update).toHaveBeenCalled();
+    const [updateArg] = prisma.user.update.mock.calls[0] as [
+      {
+        data: {
+          failedLoginAttempts: number;
+        };
+      },
+    ];
+    expect(updateArg.data.failedLoginAttempts).toBe(0);
   });
 });

@@ -59,10 +59,14 @@ export class AttachmentsService {
     sizeBytes: number;
   }) {
     const fileName = dto.fileName.trim();
+    const hasControlChars = Array.from(fileName).some((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 0 && code <= 31;
+    });
     if (fileName.includes('/') || fileName.includes('\\')) {
       throw new BadRequestException('Invalid attachment file name');
     }
-    if (/[\x00-\x1F]/.test(fileName)) {
+    if (hasControlChars) {
       throw new BadRequestException('Invalid attachment file name');
     }
 
@@ -81,7 +85,9 @@ export class AttachmentsService {
   ) {
     if (userRole === UserRole.ADMIN) return true;
     if (ownerId === userId) return true;
-    return memberRole === ProjectRole.OWNER || memberRole === ProjectRole.MANAGER;
+    return (
+      memberRole === ProjectRole.OWNER || memberRole === ProjectRole.MANAGER
+    );
   }
 
   private hashToken(token: string) {
@@ -93,9 +99,8 @@ export class AttachmentsService {
     userRole: string,
     taskId: string,
   ): Promise<TaskAccessContext> {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
 
     const where =
       userRole === UserRole.ADMIN
@@ -162,9 +167,8 @@ export class AttachmentsService {
     userRole: string,
     projectId: string,
   ): Promise<ProjectAccessContext> {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
 
     const where =
       userRole === UserRole.ADMIN

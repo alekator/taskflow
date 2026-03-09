@@ -60,9 +60,8 @@ export class NotificationsService {
     userRole: string,
     query: ListNotificationsQueryDto,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -107,9 +106,7 @@ export class NotificationsService {
     ]);
 
     const related = await this.loadRelatedEntities(logs);
-    const items = logs.map((log) =>
-      this.toNotification(log, userId, related),
-    );
+    const items = logs.map((log) => this.toNotification(log, userId, related));
 
     return toPaginatedResult(items, page, limit, total);
   }
@@ -219,8 +216,11 @@ export class NotificationsService {
       ).values(),
     ).filter(Boolean) as string[];
 
-    const [projects, tasks, users]: [RelatedProject[], RelatedTask[], RelatedUser[]] =
-      await Promise.all([
+    const [projects, tasks, users]: [
+      RelatedProject[],
+      RelatedTask[],
+      RelatedUser[],
+    ] = await Promise.all([
       projectIds.length > 0
         ? this.prisma.project.findMany({
             where: { id: { in: projectIds } },
@@ -243,13 +243,14 @@ export class NotificationsService {
             select: { id: true, name: true, email: true },
           })
         : Promise.resolve([]),
-      ]);
+    ]);
 
     return {
       projects: new Map<string, RelatedProject>(
-        projects.map(
-          (project): [string, RelatedProject] => [project.id, project],
-        ),
+        projects.map((project): [string, RelatedProject] => [
+          project.id,
+          project,
+        ]),
       ),
       tasks: new Map<string, RelatedTask>(
         tasks.map((task): [string, RelatedTask] => [task.id, task]),
@@ -261,15 +262,18 @@ export class NotificationsService {
   }
 
   private toNotification(
-    log: AuditLogRow & { notificationReceipts?: Array<{ readAt: Date | null }> },
+    log: AuditLogRow & {
+      notificationReceipts?: Array<{ readAt: Date | null }>;
+    },
     currentUserId: string,
     related: RelatedEntities,
   ): NotificationItem {
     const actor = this.userLabel(log.actorUserId, related.users);
     const project = log.projectId ? related.projects.get(log.projectId) : null;
-    const task = log.entityType === 'task' && log.entityId
-      ? related.tasks.get(log.entityId)
-      : null;
+    const task =
+      log.entityType === 'task' && log.entityId
+        ? related.tasks.get(log.entityId)
+        : null;
     const subjectUser =
       (log.entityType === 'user' || log.entityType === 'project_member') &&
       log.entityId
@@ -286,7 +290,9 @@ export class NotificationsService {
         this.readPayloadString(payload, 'title') ??
         this.readPayloadString(payload, 'taskTitle'),
       subjectUser:
-        subjectUser?.name || subjectUser?.email || (log.entityId ? this.short(log.entityId) : null),
+        subjectUser?.name ||
+        subjectUser?.email ||
+        (log.entityId ? this.short(log.entityId) : null),
       status: this.readPayloadString(payload, 'status'),
     });
 
@@ -312,9 +318,8 @@ export class NotificationsService {
   }
 
   async unreadCount(userId: string, userRole: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const accessibleProjectIds = await this.getAccessibleProjectIds(
       userId,
       userRole,
@@ -334,9 +339,8 @@ export class NotificationsService {
   }
 
   async markRead(userId: string, userRole: string, notificationId: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const accessibleProjectIds = await this.getAccessibleProjectIds(
       userId,
       userRole,
@@ -377,9 +381,8 @@ export class NotificationsService {
   }
 
   async markAllRead(userId: string, userRole: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const accessibleProjectIds = await this.getAccessibleProjectIds(
       userId,
       userRole,
@@ -434,7 +437,9 @@ export class NotificationsService {
     subjectUser: string | null;
     status: string | null;
   }) {
-    const projectRef = input.projectName ? `"${input.projectName}"` : 'a project';
+    const projectRef = input.projectName
+      ? `"${input.projectName}"`
+      : 'a project';
     const taskRef = input.taskTitle ? `"${input.taskTitle}"` : 'a task';
     const userRef = input.subjectUser ? `"${input.subjectUser}"` : 'a teammate';
 
@@ -566,10 +571,7 @@ export class NotificationsService {
     return typeof value === 'string' ? value : null;
   }
 
-  private userLabel(
-    userId: string | null,
-    users: Map<string, RelatedUser>,
-  ) {
+  private userLabel(userId: string | null, users: Map<string, RelatedUser>) {
     if (!userId) return 'Someone';
     const user = users.get(userId);
     if (!user) return this.short(userId);
@@ -577,6 +579,8 @@ export class NotificationsService {
   }
 
   private short(value: string) {
-    return value.length > 16 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
+    return value.length > 16
+      ? `${value.slice(0, 8)}...${value.slice(-4)}`
+      : value;
   }
 }

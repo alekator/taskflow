@@ -7,6 +7,10 @@ on:
       - master
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -29,17 +33,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
 
-      - name: Type check
-        run: pnpm check-types
+      - name: API lint
+        run: pnpm --filter api run lint
 
-      - name: API unit tests with quality gates
-        run: pnpm --filter api run test:quality
+      - name: Web lint
+        run: pnpm --filter web run lint
 
-      - name: Build
-        run: pnpm build
+      - name: Web type check
+        run: pnpm --filter web run check-types
+
+      - name: Web unit/component tests
+        run: pnpm --filter web run test:unit
+
+      - name: API unit tests
+        run: pnpm --filter api run test:unit
+
+      - name: API build
+        run: pnpm --filter api run build
+
+      - name: Web build
+        run: pnpm --filter web run build
 
   e2e:
     runs-on: ubuntu-latest
@@ -94,9 +110,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
       - name: Run Prisma migrations
         run: pnpm --filter api exec prisma migrate deploy
 
       - name: API e2e tests
         run: pnpm --filter api run test:e2e:ci
-

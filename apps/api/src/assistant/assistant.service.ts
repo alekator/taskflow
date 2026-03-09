@@ -343,7 +343,7 @@ export class AssistantService {
     const assigneeLoad = assigneeGroups
       .map((group) => {
         const user = group.assigneeId
-          ? assigneeMap.get(group.assigneeId) ?? null
+          ? (assigneeMap.get(group.assigneeId) ?? null)
           : null;
         return {
           userId: group.assigneeId,

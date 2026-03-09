@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { AsyncJob, AsyncJobStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
@@ -171,7 +176,9 @@ export class AsyncJobsService implements OnModuleInit, OnModuleDestroy {
             where: { id: candidate.id },
             data: {
               attempts: nextAttempts,
-              status: reachedLimit ? AsyncJobStatus.FAILED : AsyncJobStatus.PENDING,
+              status: reachedLimit
+                ? AsyncJobStatus.FAILED
+                : AsyncJobStatus.PENDING,
               runAt: reachedLimit
                 ? candidate.runAt
                 : new Date(Date.now() + retryDelayMs),
@@ -215,7 +222,9 @@ export class AsyncJobsService implements OnModuleInit, OnModuleDestroy {
 
   private async handleSendWorkspaceInviteEmail(job: AsyncJob) {
     const payload =
-      job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload)
+      job.payload &&
+      typeof job.payload === 'object' &&
+      !Array.isArray(job.payload)
         ? (job.payload as Record<string, unknown>)
         : null;
 

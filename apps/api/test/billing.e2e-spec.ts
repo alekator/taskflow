@@ -147,7 +147,8 @@ describe('Billing (e2e)', () => {
       .get(api('/billing/subscription'))
       .set('Authorization', `Bearer ${adminLogin.accessToken}`)
       .expect(200);
-    const workspaceId = (subscription.body as { workspaceId: string }).workspaceId;
+    const workspaceId = (subscription.body as { workspaceId: string })
+      .workspaceId;
 
     const payload = {
       provider: BillingProvider.STRIPE,
@@ -203,7 +204,8 @@ describe('Billing (e2e)', () => {
       .get(api('/billing/subscription'))
       .set('Authorization', `Bearer ${adminLogin.accessToken}`)
       .expect(200);
-    const workspaceId = (subscription.body as { workspaceId: string }).workspaceId;
+    const workspaceId = (subscription.body as { workspaceId: string })
+      .workspaceId;
 
     await request(server)
       .post(api('/billing/webhooks/provider'))

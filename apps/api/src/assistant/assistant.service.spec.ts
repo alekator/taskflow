@@ -114,14 +114,17 @@ describe('AssistantService', () => {
     expect(result.recentTasks).toHaveLength(1);
     expect(result.summary).toContain('5 open of 8 tasks');
 
-    expect(prisma.project.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          workspaceId: 'ws-main',
-          id: 'p1',
-        }),
-      }),
-    );
+    expect(prisma.project.findFirst).toHaveBeenCalled();
+    const [findFirstArg] = prisma.project.findFirst.mock.calls[0] as [
+      {
+        where: {
+          workspaceId: string;
+          id: string;
+        };
+      },
+    ];
+    expect(findFirstArg.where.workspaceId).toBe('ws-main');
+    expect(findFirstArg.where.id).toBe('p1');
   });
 
   it('throws when project is not accessible', async () => {

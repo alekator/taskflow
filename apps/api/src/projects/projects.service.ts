@@ -35,7 +35,11 @@ export class ProjectsService {
     });
   }
 
-  private async requireRole(userId: string, workspaceId: string, projectId: string) {
+  private async requireRole(
+    userId: string,
+    workspaceId: string,
+    projectId: string,
+  ) {
     const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
@@ -53,9 +57,8 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
 
     const project = await this.prisma.project.create({
       data: {
@@ -91,9 +94,8 @@ export class ProjectsService {
   }
 
   async findMy(userId: string, userRole: string, query: ListProjectsQueryDto) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
@@ -143,9 +145,8 @@ export class ProjectsService {
   }
 
   async findOne(userId: string, projectId: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     await this.requireRole(userId, workspaceId, projectId);
 
     const project = await this.prisma.project.findFirst({
@@ -162,9 +163,8 @@ export class ProjectsService {
     ifMatchHeader: string | undefined,
     dto: UpdateProjectDto,
   ) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.requireRole(userId, workspaceId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
@@ -210,9 +210,8 @@ export class ProjectsService {
   }
 
   async remove(userId: string, projectId: string, ifMatchHeader?: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const role = await this.requireRole(userId, workspaceId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
@@ -535,9 +534,8 @@ export class ProjectsService {
   }
 
   async leave(userId: string, projectId: string) {
-    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
-      userId,
-    );
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(userId);
     const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 

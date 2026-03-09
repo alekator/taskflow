@@ -28,7 +28,12 @@ export class AttachmentsController {
     @Param('taskId') taskId: string,
     @Body() dto: CreateTaskAttachmentUploadDto,
   ) {
-    return this.attachments.createUpload(req.user.id, req.user.role, taskId, dto);
+    return this.attachments.createUpload(
+      req.user.id,
+      req.user.role,
+      taskId,
+      dto,
+    );
   }
 
   @Post(':attachmentId/complete')
@@ -58,6 +63,11 @@ export class AttachmentsController {
     @Param('taskId') taskId: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    return this.attachments.remove(req.user.id, req.user.role, taskId, attachmentId);
+    return this.attachments.remove(
+      req.user.id,
+      req.user.role,
+      taskId,
+      attachmentId,
+    );
   }
 }

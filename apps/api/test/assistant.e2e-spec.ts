@@ -228,7 +228,10 @@ describe('Assistant (e2e)', () => {
     const projectRes = await request(server)
       .post(api('/projects'))
       .set(authHeader(admin.accessToken))
-      .send({ name: 'Assistant summary project', description: 'summary target' })
+      .send({
+        name: 'Assistant summary project',
+        description: 'summary target',
+      })
       .expect(201);
     const project = projectRes.body as { id: string };
 
@@ -279,7 +282,9 @@ describe('Assistant (e2e)', () => {
     expect(summaryBody.statusBreakdown.TODO).toBe(1);
     expect(summaryBody.statusBreakdown.DONE).toBe(1);
     expect(summaryBody.assigneeLoad[0].userId).toBe(memberUser.id);
-    expect(summaryBody.summary).toContain('Project "Assistant summary project"');
+    expect(summaryBody.summary).toContain(
+      'Project "Assistant summary project"',
+    );
 
     await request(server)
       .get(api(`/assistant/project-summary?projectId=${project.id}`))

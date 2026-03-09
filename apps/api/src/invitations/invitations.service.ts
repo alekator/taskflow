@@ -4,7 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, WorkspaceInvitationStatus, WorkspaceMemberRole } from '@prisma/client';
+import {
+  Prisma,
+  WorkspaceInvitationStatus,
+  WorkspaceMemberRole,
+} from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { AsyncJobsService } from '../async-jobs/async-jobs.service';
 import { AuditService } from '../audit/audit.service';
@@ -31,7 +35,9 @@ export class InvitationsService {
 
   private requireAdminWorkspaceRole(role: WorkspaceMemberRole) {
     if (role !== WorkspaceMemberRole.ADMIN) {
-      throw new ForbiddenException('Only workspace admins can manage invitations');
+      throw new ForbiddenException(
+        'Only workspace admins can manage invitations',
+      );
     }
   }
 
@@ -40,7 +46,8 @@ export class InvitationsService {
   }
 
   private buildInviteLink(token: string) {
-    const baseUrl = process.env.INVITE_BASE_URL?.trim() || 'http://localhost:3002';
+    const baseUrl =
+      process.env.INVITE_BASE_URL?.trim() || 'http://localhost:3002';
     return `${baseUrl.replace(/\/+$/, '')}/auth/register?invite=${encodeURIComponent(token)}`;
   }
 
@@ -79,13 +86,17 @@ export class InvitationsService {
       select: { id: true },
     });
     if (activeInvite) {
-      throw new ConflictException('Active invitation already exists for this email');
+      throw new ConflictException(
+        'Active invitation already exists for this email',
+      );
     }
 
     const rawToken = randomBytes(24).toString('base64url');
     const tokenHash = this.tokenHash(rawToken);
     const expiresInDays = dto.expiresInDays ?? 7;
-    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(
+      Date.now() + expiresInDays * 24 * 60 * 60 * 1000,
+    );
 
     const inviteLink = this.buildInviteLink(rawToken);
 

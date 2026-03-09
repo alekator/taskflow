@@ -125,9 +125,15 @@ describe('Workspace Invitations (e2e)', () => {
       .expect(200);
 
     const listBody = listed.body as {
-      items: Array<{ id: string; email: string; status: WorkspaceInvitationStatus }>;
+      items: Array<{
+        id: string;
+        email: string;
+        status: WorkspaceInvitationStatus;
+      }>;
     };
-    expect(listBody.items.some((item) => item.id === createdBody.id)).toBe(true);
+    expect(listBody.items.some((item) => item.id === createdBody.id)).toBe(
+      true,
+    );
   });
 
   it('non-admin workspace user cannot create invitation', async () => {
@@ -155,8 +161,10 @@ describe('Workspace Invitations (e2e)', () => {
       })
       .expect(201);
 
-    const inviteToken = (inviteRes.body as { inviteToken: string; id: string }).inviteToken;
-    const invitationId = (inviteRes.body as { inviteToken: string; id: string }).id;
+    const inviteToken = (inviteRes.body as { inviteToken: string; id: string })
+      .inviteToken;
+    const invitationId = (inviteRes.body as { inviteToken: string; id: string })
+      .id;
 
     const registerRes = await request(server)
       .post(api('/auth/register'))
