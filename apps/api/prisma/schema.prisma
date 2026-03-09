@@ -81,6 +81,7 @@ model User {
   assistantMessages AssistantMessage[]
   invitationsSent WorkspaceInvitation[] @relation("WorkspaceInvitationSender")
   taskAttachmentsUploaded TaskAttachment[]
+  projectAttachmentsUploaded ProjectAttachment[]
   notificationReceipts NotificationReceipt[]
 
   @@index([defaultWorkspaceId])
@@ -195,6 +196,7 @@ model Project {
   owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
 
   tasks   Task[]
+  attachments ProjectAttachment[]
   members ProjectMember[]
 
   @@index([workspaceId])
@@ -360,6 +362,30 @@ model TaskAttachment {
   uploadedByUser User             @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
 
   @@index([taskId, status])
+  @@index([uploadedByUserId, createdAt])
+  @@index([createdAt])
+}
+
+model ProjectAttachment {
+  id               String           @id @default(cuid())
+  projectId        String
+  uploadedByUserId String
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  storageProvider  String
+  objectKey        String           @unique
+  status           AttachmentStatus @default(PENDING)
+  uploadTokenHash  String?
+  uploadedAt       DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])
   @@index([uploadedByUserId, createdAt])
   @@index([createdAt])
 }

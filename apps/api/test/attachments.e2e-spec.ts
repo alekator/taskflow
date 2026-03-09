@@ -15,7 +15,7 @@ type LoginResponse = {
   refreshToken: string;
 };
 
-describe('Task Attachments (e2e)', () => {
+describe('Attachments (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let server: Server;
@@ -77,6 +77,7 @@ describe('Task Attachments (e2e)', () => {
   }
 
   async function cleanDb() {
+    await prisma.projectAttachment.deleteMany();
     await prisma.taskAttachment.deleteMany();
     await prisma.task.deleteMany();
     await prisma.projectMember.deleteMany();
@@ -230,6 +231,100 @@ describe('Task Attachments (e2e)', () => {
 
     await request(server)
       .get(api(`/tasks/${task.id}/attachments`))
+      .set('Authorization', `Bearer ${outsiderLogin.accessToken}`)
+      .expect(404);
+  });
+
+  it('supports project attachment upload intent -> complete -> list -> delete', async () => {
+    const { user1, user2 } = await ensureUsers();
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const memberOneLogin = await login(creds.user1.email, creds.user1.password);
+    const memberTwoLogin = await login(creds.user2.email, creds.user2.password);
+    const project = await createProject(adminLogin.accessToken, 'Project Attachments');
+
+    await request(server)
+      .post(api(`/projects/${project.id}/members`))
+      .set('Authorization', `Bearer ${adminLogin.accessToken}`)
+      .send({ userId: user1.id, role: ProjectRole.MEMBER })
+      .expect(201);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/members`))
+      .set('Authorization', `Bearer ${adminLogin.accessToken}`)
+      .send({ userId: user2.id, role: ProjectRole.MEMBER })
+      .expect(201);
+
+    const uploadIntent = await request(server)
+      .post(api(`/projects/${project.id}/attachments/uploads`))
+      .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
+      .send({
+        fileName: 'project-brief.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 4096,
+      })
+      .expect(201);
+
+    const uploadBody = uploadIntent.body as {
+      attachment: { id: string; status: string };
+      upload: { uploadUrl: string };
+      uploadToken: string;
+    };
+    expect(uploadBody.attachment.status).toBe('PENDING');
+    expect(uploadBody.upload.uploadUrl).toContain(uploadBody.attachment.id);
+
+    await request(server)
+      .post(
+        api(
+          `/projects/${project.id}/attachments/${uploadBody.attachment.id}/complete`,
+        ),
+      )
+      .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
+      .send({ uploadToken: uploadBody.uploadToken })
+      .expect(201);
+
+    const listed = await request(server)
+      .get(api(`/projects/${project.id}/attachments`))
+      .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
+      .expect(200);
+    const listedItems = listed.body as Array<{ id: string; status: string }>;
+    expect(listedItems).toHaveLength(1);
+    expect(listedItems[0].id).toBe(uploadBody.attachment.id);
+    expect(listedItems[0].status).toBe('AVAILABLE');
+
+    await request(server)
+      .delete(api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`))
+      .set('Authorization', `Bearer ${memberTwoLogin.accessToken}`)
+      .expect(403);
+
+    await request(server)
+      .delete(api(`/projects/${project.id}/attachments/${uploadBody.attachment.id}`))
+      .set('Authorization', `Bearer ${adminLogin.accessToken}`)
+      .expect(200);
+
+    const afterDelete = await request(server)
+      .get(api(`/projects/${project.id}/attachments`))
+      .set('Authorization', `Bearer ${memberOneLogin.accessToken}`)
+      .expect(200);
+    expect(afterDelete.body).toEqual([]);
+  });
+
+  it('hides project attachment endpoints from non-members', async () => {
+    const { user1 } = await ensureUsers();
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const outsiderLogin = await login(creds.user2.email, creds.user2.password);
+    const project = await createProject(
+      adminLogin.accessToken,
+      'Project Attachments Visibility',
+    );
+
+    await request(server)
+      .post(api(`/projects/${project.id}/members`))
+      .set('Authorization', `Bearer ${adminLogin.accessToken}`)
+      .send({ userId: user1.id, role: ProjectRole.MEMBER })
+      .expect(201);
+
+    await request(server)
+      .get(api(`/projects/${project.id}/attachments`))
       .set('Authorization', `Bearer ${outsiderLogin.accessToken}`)
       .expect(404);
   });

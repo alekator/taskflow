@@ -12,6 +12,7 @@ import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectStorageService } from '../storage/object-storage.service';
 import { CompleteTaskAttachmentUploadDto } from './dto/complete-task-attachment-upload.dto';
+import { CreateProjectAttachmentUploadDto } from './dto/create-project-attachment-upload.dto';
 import { CreateTaskAttachmentUploadDto } from './dto/create-task-attachment-upload.dto';
 
 type TaskAccessContext = {
@@ -20,6 +21,15 @@ type TaskAccessContext = {
     id: string;
     projectId: string;
     project: { id: string; ownerId: string };
+  };
+  canManageAttachments: boolean;
+};
+
+type ProjectAccessContext = {
+  workspaceId: string;
+  project: {
+    id: string;
+    ownerId: string;
   };
   canManageAttachments: boolean;
 };
@@ -43,7 +53,11 @@ export class AttachmentsService {
       .filter((v) => v.length > 0);
   }
 
-  private validateUploadInput(dto: CreateTaskAttachmentUploadDto) {
+  private validateUploadInput(dto: {
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  }) {
     const fileName = dto.fileName.trim();
     if (fileName.includes('/') || fileName.includes('\\')) {
       throw new BadRequestException('Invalid attachment file name');
@@ -57,6 +71,17 @@ export class AttachmentsService {
     if (!allowed.includes(mimeType)) {
       throw new BadRequestException('Attachment mime type is not allowed');
     }
+  }
+
+  private resolveProjectManagerAccess(
+    userId: string,
+    userRole: string,
+    ownerId: string,
+    memberRole?: ProjectRole,
+  ) {
+    if (userRole === UserRole.ADMIN) return true;
+    if (ownerId === userId) return true;
+    return memberRole === ProjectRole.OWNER || memberRole === ProjectRole.MANAGER;
   }
 
   private hashToken(token: string) {
@@ -104,10 +129,11 @@ export class AttachmentsService {
       throw new NotFoundException('Task not found');
     }
 
-    let canManageAttachments = userRole === UserRole.ADMIN;
-    if (!canManageAttachments && task.project.ownerId === userId) {
-      canManageAttachments = true;
-    }
+    let canManageAttachments = this.resolveProjectManagerAccess(
+      userId,
+      userRole,
+      task.project.ownerId,
+    );
 
     if (!canManageAttachments) {
       const member = await this.prisma.projectMember.findUnique({
@@ -120,11 +146,76 @@ export class AttachmentsService {
         select: { role: true },
       });
 
-      canManageAttachments =
-        member?.role === ProjectRole.OWNER || member?.role === ProjectRole.MANAGER;
+      canManageAttachments = this.resolveProjectManagerAccess(
+        userId,
+        userRole,
+        task.project.ownerId,
+        member?.role,
+      );
     }
 
     return { workspaceId, task, canManageAttachments };
+  }
+
+  private async getProjectAccess(
+    userId: string,
+    userRole: string,
+    projectId: string,
+  ): Promise<ProjectAccessContext> {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+
+    const where =
+      userRole === UserRole.ADMIN
+        ? {
+            id: projectId,
+            workspaceId,
+          }
+        : {
+            id: projectId,
+            workspaceId,
+            OR: [{ ownerId: userId }, { members: { some: { userId } } }],
+          };
+
+    const project = await this.prisma.project.findFirst({
+      where,
+      select: {
+        id: true,
+        ownerId: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    let canManageAttachments = this.resolveProjectManagerAccess(
+      userId,
+      userRole,
+      project.ownerId,
+    );
+
+    if (!canManageAttachments) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId,
+          },
+        },
+        select: { role: true },
+      });
+
+      canManageAttachments = this.resolveProjectManagerAccess(
+        userId,
+        userRole,
+        project.ownerId,
+        member?.role,
+      );
+    }
+
+    return { workspaceId, project, canManageAttachments };
   }
 
   async createUpload(
@@ -340,6 +431,224 @@ export class AttachmentsService {
       entityId: attachment.id,
       projectId: access.task.projectId,
       payload: { taskId },
+    });
+
+    return { ok: true };
+  }
+
+  async createProjectUpload(
+    userId: string,
+    userRole: string,
+    projectId: string,
+    dto: CreateProjectAttachmentUploadDto,
+  ) {
+    this.validateUploadInput(dto);
+    const access = await this.getProjectAccess(userId, userRole, projectId);
+
+    const uploadToken = randomBytes(24).toString('base64url');
+    const attachment = await this.prisma.projectAttachment.create({
+      data: {
+        projectId: access.project.id,
+        uploadedByUserId: userId,
+        fileName: dto.fileName.trim(),
+        mimeType: dto.mimeType.trim().toLowerCase(),
+        sizeBytes: dto.sizeBytes,
+        storageProvider: 'LOCAL',
+        objectKey: `${access.workspaceId}/${access.project.id}/pending_${Date.now()}_${randomBytes(6).toString('hex')}`,
+        status: AttachmentStatus.PENDING,
+        uploadTokenHash: this.hashToken(uploadToken),
+      },
+      select: {
+        id: true,
+        projectId: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        storageProvider: true,
+      },
+    });
+
+    const target = this.storage.createProjectUploadTarget({
+      workspaceId: access.workspaceId,
+      projectId: access.project.id,
+      attachmentId: attachment.id,
+      fileName: attachment.fileName,
+      uploadToken,
+    });
+
+    await this.prisma.projectAttachment.update({
+      where: { id: attachment.id },
+      data: {
+        objectKey: target.objectKey,
+      },
+    });
+
+    await this.audit.log({
+      action: 'PROJECT_ATTACHMENT_UPLOAD_CREATE',
+      actorUserId: userId,
+      entityType: 'project_attachment',
+      entityId: attachment.id,
+      projectId: access.project.id,
+      payload: {
+        projectId: access.project.id,
+        fileName: attachment.fileName,
+        sizeBytes: attachment.sizeBytes,
+      },
+    });
+
+    return {
+      attachment: {
+        ...attachment,
+        objectKey: target.objectKey,
+        status: AttachmentStatus.PENDING,
+      },
+      upload: target,
+      uploadToken,
+    };
+  }
+
+  async completeProjectUpload(
+    userId: string,
+    userRole: string,
+    projectId: string,
+    attachmentId: string,
+    dto: CompleteTaskAttachmentUploadDto,
+  ) {
+    await this.getProjectAccess(userId, userRole, projectId);
+    const attachment = await this.prisma.projectAttachment.findFirst({
+      where: {
+        id: attachmentId,
+        projectId,
+      },
+    });
+
+    if (!attachment || attachment.status === AttachmentStatus.DELETED) {
+      throw new NotFoundException('Attachment not found');
+    }
+
+    if (attachment.status === AttachmentStatus.AVAILABLE) {
+      throw new ConflictException('Attachment is already completed');
+    }
+
+    if (!attachment.uploadTokenHash) {
+      throw new ForbiddenException('Attachment upload token is invalid');
+    }
+
+    if (attachment.uploadTokenHash !== this.hashToken(dto.uploadToken.trim())) {
+      throw new ForbiddenException('Attachment upload token is invalid');
+    }
+
+    const updated = await this.prisma.projectAttachment.update({
+      where: { id: attachment.id },
+      data: {
+        status: AttachmentStatus.AVAILABLE,
+        uploadedAt: new Date(),
+        uploadTokenHash: null,
+      },
+      select: {
+        id: true,
+        projectId: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        storageProvider: true,
+        objectKey: true,
+        status: true,
+        uploadedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    await this.audit.log({
+      action: 'PROJECT_ATTACHMENT_UPLOAD_COMPLETE',
+      actorUserId: userId,
+      entityType: 'project_attachment',
+      entityId: attachment.id,
+      projectId,
+      payload: {
+        projectId,
+      },
+    });
+
+    return {
+      ...updated,
+      downloadUrl: this.storage.getProjectDownloadUrl(projectId, attachment.id),
+    };
+  }
+
+  async listProject(userId: string, userRole: string, projectId: string) {
+    await this.getProjectAccess(userId, userRole, projectId);
+
+    const items = await this.prisma.projectAttachment.findMany({
+      where: {
+        projectId,
+        status: { not: AttachmentStatus.DELETED },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        fileName: true,
+        mimeType: true,
+        sizeBytes: true,
+        storageProvider: true,
+        status: true,
+        uploadedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return items.map((item) => ({
+      ...item,
+      downloadUrl: this.storage.getProjectDownloadUrl(projectId, item.id),
+    }));
+  }
+
+  async removeProject(
+    userId: string,
+    userRole: string,
+    projectId: string,
+    attachmentId: string,
+  ) {
+    const access = await this.getProjectAccess(userId, userRole, projectId);
+    const attachment = await this.prisma.projectAttachment.findFirst({
+      where: {
+        id: attachmentId,
+        projectId,
+        status: { not: AttachmentStatus.DELETED },
+      },
+      select: {
+        id: true,
+        uploadedByUserId: true,
+      },
+    });
+
+    if (!attachment) {
+      throw new NotFoundException('Attachment not found');
+    }
+
+    const canDelete =
+      access.canManageAttachments || attachment.uploadedByUserId === userId;
+    if (!canDelete) {
+      throw new ForbiddenException();
+    }
+
+    await this.prisma.projectAttachment.update({
+      where: { id: attachment.id },
+      data: {
+        status: AttachmentStatus.DELETED,
+        deletedAt: new Date(),
+      },
+    });
+
+    await this.audit.log({
+      action: 'PROJECT_ATTACHMENT_DELETE',
+      actorUserId: userId,
+      entityType: 'project_attachment',
+      entityId: attachment.id,
+      projectId,
+      payload: { projectId },
     });
 
     return { ok: true };
