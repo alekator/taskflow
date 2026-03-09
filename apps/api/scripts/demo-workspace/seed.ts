@@ -15,6 +15,8 @@ const prisma = new PrismaClient({ adapter });
 const DEMO_MARKER = "[demo-seed]";
 const DEMO_USER_AGENT = "demo-workspace-seed";
 const DEFAULT_PASSWORD = "123456";
+const MAIN_WORKSPACE_SLUG = "main";
+const MAIN_WORKSPACE_ID = "ws_main";
 
 const STATUSES = ["TODO", "IN_PROGRESS", "TESTING", "DONE"] as const;
 const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
@@ -328,6 +330,16 @@ async function resetExistingDemoWorkspace() {
 async function ensureUsers(profile: SeedProfile) {
   const passwordHash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
   const seeds = [...BASE_USER_SEEDS, ...PROFILE_CONFIG[profile].extraUsers];
+  const workspace = await prisma.workspace.upsert({
+    where: { slug: MAIN_WORKSPACE_SLUG },
+    update: {},
+    create: {
+      id: MAIN_WORKSPACE_ID,
+      slug: MAIN_WORKSPACE_SLUG,
+      name: "TaskFlow Main Workspace",
+    },
+    select: { id: true },
+  });
 
   const users: User[] = [];
   for (const seed of seeds) {
@@ -336,18 +348,38 @@ async function ensureUsers(profile: SeedProfile) {
       update: {
         name: seed.name,
         role: seed.role,
+        defaultWorkspaceId: workspace.id,
       },
       create: {
         email: seed.email,
         passwordHash,
         name: seed.name,
         role: seed.role,
+        defaultWorkspaceId: workspace.id,
       },
     });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      },
+      update: {
+        role: user.role === "ADMIN" ? "ADMIN" : "MEMBER",
+      },
+      create: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        role: user.role === "ADMIN" ? "ADMIN" : "MEMBER",
+      },
+    });
+
     users.push(user);
   }
 
-  return users;
+  return { users, workspaceId: workspace.id };
 }
 
 async function main() {
@@ -355,7 +387,7 @@ async function main() {
   const config = PROFILE_CONFIG[profile];
 
   await resetExistingDemoWorkspace();
-  const users = await ensureUsers(profile);
+  const { users, workspaceId } = await ensureUsers(profile);
 
   const admin = users.find((user) => user.email === "admin@test.com");
   if (!admin) throw new Error("Admin user is required for demo seeding");
@@ -373,6 +405,7 @@ async function main() {
         name: `${PROJECT_NAMES[index % PROJECT_NAMES.length]} ${String(index + 1).padStart(2, "0")}`,
         description: `${pick(DESCRIPTION_BITS)} ${DEMO_MARKER} ${profile === "heavy" ? "[heavy-demo]" : ""}`.trim(),
         ownerId: owner.id,
+        workspaceId,
       },
     });
     projectCount += 1;

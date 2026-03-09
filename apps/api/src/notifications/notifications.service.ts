@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, UserRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto';
 
 type AuditLogRow = {
@@ -47,17 +48,27 @@ type RelatedEntities = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workspaceAccess: WorkspaceAccessService,
+  ) {}
 
   async list(
     userId: string,
     userRole: string,
     query: ListNotificationsQueryDto,
   ) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    const accessibleProjectIds = await this.getAccessibleProjectIds(userId, userRole);
+    const accessibleProjectIds = await this.getAccessibleProjectIds(
+      userId,
+      userRole,
+      workspaceId,
+    );
 
     const where = this.buildWhere(userId, userRole, accessibleProjectIds);
 
@@ -90,9 +101,14 @@ export class NotificationsService {
     return toPaginatedResult(items, page, limit, total);
   }
 
-  private async getAccessibleProjectIds(userId: string, userRole: string) {
+  private async getAccessibleProjectIds(
+    userId: string,
+    userRole: string,
+    workspaceId: string,
+  ) {
     if (userRole === UserRole.ADMIN) {
       const projects = await this.prisma.project.findMany({
+        where: { workspaceId },
         select: { id: true },
       });
       return projects.map((project) => project.id);
@@ -100,6 +116,7 @@ export class NotificationsService {
 
     const memberships = await this.prisma.project.findMany({
       where: {
+        workspaceId,
         OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
       select: { id: true },

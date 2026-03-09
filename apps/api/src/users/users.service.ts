@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, TaskStatus, UserRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
+import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 
@@ -23,13 +24,24 @@ type WorkspaceUserItem = {
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private workspaceAccess: WorkspaceAccessService,
+  ) {}
 
-  async list(_requesterId: string, query: ListUsersQueryDto) {
+  async list(requesterId: string, query: ListUsersQueryDto) {
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
     const where: Prisma.UserWhereInput = {
+      workspaceMembers: {
+        some: {
+          workspaceId,
+        },
+      },
       ...(query.role ? { role: query.role } : {}),
       ...(query.search
         ? {
@@ -59,6 +71,11 @@ export class UsersService {
           name: true,
           createdAt: true,
           projectMembers: {
+            where: {
+              project: {
+                workspaceId,
+              },
+            },
             select: {
               role: true,
               project: { select: { id: true, name: true } },
@@ -79,6 +96,9 @@ export class UsersService {
           by: ['assigneeId'],
           where: {
             assigneeId: { in: userIds },
+            project: {
+              workspaceId,
+            },
             status: {
               in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.TESTING],
             },
@@ -89,6 +109,9 @@ export class UsersService {
           by: ['assigneeId'],
           where: {
             assigneeId: { in: userIds },
+            project: {
+              workspaceId,
+            },
             status: TaskStatus.DONE,
           },
           _count: { _all: true },
@@ -97,6 +120,9 @@ export class UsersService {
           by: ['assigneeId'],
           where: {
             assigneeId: { in: userIds },
+            project: {
+              workspaceId,
+            },
           },
           _count: { _all: true },
         }),

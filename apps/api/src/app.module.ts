@@ -14,6 +14,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
 import { RequestContextModule } from './common/request-context.module';
+import { WorkspaceAccessModule } from './common/workspace-access.module';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -32,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
       validate: validateEnv,
     }),
     RequestContextModule,
+    WorkspaceAccessModule,
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

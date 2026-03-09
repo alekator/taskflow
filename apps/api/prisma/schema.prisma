@@ -12,6 +12,11 @@ enum UserRole {
   USER
 }
 
+enum WorkspaceMemberRole {
+  ADMIN
+  MEMBER
+}
+
 enum ProjectRole {
   OWNER
   MANAGER
@@ -26,16 +31,48 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  defaultWorkspaceId String?
 
   refreshTokenHash String?
   refreshJtiHash String?
 
+  defaultWorkspace Workspace? @relation("UserDefaultWorkspace", fields: [defaultWorkspaceId], references: [id], onDelete: SetNull)
   projectsOwned  Project[]       @relation("ProjectOwner")
   tasksAssigned  Task[]          @relation("TaskAssignee")
   projectMembers ProjectMember[]
+  workspaceMembers WorkspaceMember[]
   auditLogs      AuditLog[]
   idempotencyRecords IdempotencyRecord[]
   assistantMessages AssistantMessage[]
+
+  @@index([defaultWorkspaceId])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+  usersWithDefault User[] @relation("UserDefaultWorkspace")
+  workspaceMembers WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String              @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceMemberRole @default(MEMBER)
+  createdAt   DateTime            @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 model Project {
@@ -47,11 +84,16 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   ownerId String
   owner   User   @relation("ProjectOwner", fields: [ownerId], references: [id])
 
   tasks   Task[]
   members ProjectMember[]
+
+  @@index([workspaceId])
 }
 
 model ProjectMember {

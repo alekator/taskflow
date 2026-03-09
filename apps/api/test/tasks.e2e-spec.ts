@@ -879,6 +879,93 @@ describe('Tasks (e2e)', () => {
     expect(body.items.every((item) => item.project?.id)).toBe(true);
   });
 
+  it('tasks workspace: ADMIN does not see tasks from another workspace', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const visibleProject = await createProject(adminLogin.accessToken, {
+      name: 'Visible Workspace Project',
+    });
+
+    await createTask(adminLogin.accessToken, visibleProject.id, {
+      title: 'Visible workspace task',
+    });
+
+    const otherWorkspace = await prisma.workspace.create({
+      data: {
+        name: 'Hidden Workspace',
+        slug: `hidden-workspace-${Date.now()}`,
+      },
+      select: { id: true },
+    });
+
+    const outsiderHash = await bcrypt.hash('123456', 10);
+    const outsider = await prisma.user.upsert({
+      where: { email: 'outsider.tasks@test.com' },
+      update: {
+        role: 'USER',
+        name: 'Tasks Outsider',
+        passwordHash: outsiderHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      create: {
+        email: 'outsider.tasks@test.com',
+        role: 'USER',
+        name: 'Tasks Outsider',
+        passwordHash: outsiderHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: otherWorkspace.id,
+          userId: outsider.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: otherWorkspace.id,
+        userId: outsider.id,
+        role: 'MEMBER',
+      },
+    });
+
+    const hiddenProject = await prisma.project.create({
+      data: {
+        name: 'Hidden Workspace Project',
+        ownerId: outsider.id,
+        workspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.projectMember.create({
+      data: {
+        projectId: hiddenProject.id,
+        userId: outsider.id,
+        role: ProjectRole.OWNER,
+      },
+    });
+
+    await prisma.task.create({
+      data: {
+        projectId: hiddenProject.id,
+        title: 'Hidden workspace task',
+        order: 1,
+      },
+    });
+
+    const res = await listWorkspaceTasks(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      items: Array<{ title: string }>;
+    };
+
+    const titles = body.items.map((item) => item.title);
+    expect(titles).toContain('Visible workspace task');
+    expect(titles).not.toContain('Hidden workspace task');
+  });
+
   it('tasks workspace: non-admin sees tasks only from accessible projects', async () => {
     const { user1, user2, user3 } = await ensureUsers();
 

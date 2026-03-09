@@ -15,6 +15,12 @@ jest.mock('bcrypt', () => ({
 
 describe('AuthService', () => {
   const prisma = {
+    workspace: {
+      upsert: jest.fn(),
+    },
+    workspaceMember: {
+      upsert: jest.fn(),
+    },
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
@@ -40,6 +46,8 @@ describe('AuthService', () => {
     delete process.env.AUTH_MANAGER_INVITE_CODE;
     delete process.env.AUTH_ADMIN_INVITE_CODE;
     service = new AuthService(prisma as never, jwt, audit as never);
+    prisma.workspace.upsert.mockResolvedValue({ id: 'ws_main' });
+    prisma.workspaceMember.upsert.mockResolvedValue({});
   });
 
   it('login throws Unauthorized when user does not exist', async () => {
@@ -57,6 +65,7 @@ describe('AuthService', () => {
       role: UserRole.USER,
       name: 'User',
       passwordHash: 'hash',
+      defaultWorkspaceId: 'ws_main',
     });
     (bcrypt.compare as jest.Mock).mockResolvedValueOnce(true);
     (jwt.sign as jest.Mock)
@@ -88,6 +97,7 @@ describe('AuthService', () => {
       email: 'u1@test.com',
       role: UserRole.USER,
       name: 'User One',
+      defaultWorkspaceId: null,
     });
     (jwt.sign as jest.Mock)
       .mockReturnValueOnce('access-token')
@@ -141,6 +151,7 @@ describe('AuthService', () => {
       email: 'manager@test.com',
       role: UserRole.MANAGER,
       name: 'Manager',
+      defaultWorkspaceId: null,
     });
     (jwt.sign as jest.Mock)
       .mockReturnValueOnce('access-token')

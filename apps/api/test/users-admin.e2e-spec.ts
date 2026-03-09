@@ -159,7 +159,7 @@ describe('Users workspace (e2e)', () => {
   it('allows ADMIN to read users list with workload and project stats', async () => {
     const admin = await prisma.user.findUnique({
       where: { email: creds.admin.email },
-      select: { id: true },
+      select: { id: true, defaultWorkspaceId: true },
     });
     const manager = await prisma.user.findUnique({
       where: { email: creds.manager.email },
@@ -170,13 +170,16 @@ describe('Users workspace (e2e)', () => {
       select: { id: true },
     });
 
-    if (!admin || !manager || !user) throw new Error('Users missing');
+    if (!admin || !manager || !user || !admin.defaultWorkspaceId) {
+      throw new Error('Users missing');
+    }
 
     const project = await prisma.project.create({
       data: {
         name: 'Users scope project',
         description: 'stats source',
         ownerId: admin.id,
+        workspaceId: admin.defaultWorkspaceId,
         members: {
           create: [
             { userId: admin.id, role: ProjectRole.OWNER },
@@ -263,5 +266,61 @@ describe('Users workspace (e2e)', () => {
     expect(body.items.every((item) => item.role === UserRole.MANAGER)).toBe(
       true,
     );
+  });
+
+  it('scopes users list to current workspace members', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+
+    const otherWorkspace = await prisma.workspace.create({
+      data: {
+        name: 'Users Hidden Workspace',
+        slug: `users-hidden-${Date.now()}`,
+      },
+      select: { id: true },
+    });
+
+    const outsiderPasswordHash = await bcrypt.hash('123456', 10);
+    const outsiderEmail = 'outsider.users@test.com';
+    const outsider = await prisma.user.upsert({
+      where: { email: outsiderEmail },
+      update: {
+        name: 'Users Outsider',
+        role: UserRole.USER,
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      create: {
+        email: outsiderEmail,
+        name: 'Users Outsider',
+        role: UserRole.USER,
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: otherWorkspace.id,
+          userId: outsider.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: otherWorkspace.id,
+        userId: outsider.id,
+        role: 'MEMBER',
+      },
+    });
+
+    const res = await request(server)
+      .get(api('/users'))
+      .query({ search: 'outsider.users@test.com' })
+      .set('Authorization', `Bearer ${adminLogin.accessToken}`)
+      .expect(200);
+
+    const body = res.body as UsersListResponse;
+    expect(body.items.some((item) => item.email === outsiderEmail)).toBe(false);
   });
 });

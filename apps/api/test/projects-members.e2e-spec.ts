@@ -295,6 +295,80 @@ describe('Projects / Members (e2e)', () => {
     expect(names).toContain('User Project');
   });
 
+  it('projects: ADMIN list is scoped to current workspace', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    await createProject(adminLogin.accessToken, { name: 'Main Workspace Project' });
+
+    const otherWorkspace = await prisma.workspace.create({
+      data: {
+        name: 'External Workspace',
+        slug: `external-${Date.now()}`,
+      },
+      select: { id: true },
+    });
+
+    const outsiderPasswordHash = await bcrypt.hash('123456', 10);
+    const outsider = await prisma.user.upsert({
+      where: { email: 'outsider.workspace@test.com' },
+      update: {
+        name: 'Workspace Outsider',
+        role: 'USER',
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      create: {
+        email: 'outsider.workspace@test.com',
+        name: 'Workspace Outsider',
+        role: 'USER',
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: otherWorkspace.id,
+          userId: outsider.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: otherWorkspace.id,
+        userId: outsider.id,
+        role: 'MEMBER',
+      },
+    });
+
+    const hiddenProject = await prisma.project.create({
+      data: {
+        name: 'External Workspace Project',
+        description: 'Should be hidden from main workspace',
+        ownerId: outsider.id,
+        workspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.projectMember.create({
+      data: {
+        projectId: hiddenProject.id,
+        userId: outsider.id,
+        role: ProjectRole.OWNER,
+      },
+    });
+
+    const res = await listProjects(adminLogin.accessToken).expect(200);
+    const body = res.body as {
+      items: Array<{ id: string; name: string }>;
+    };
+
+    const names = body.items.map((item) => item.name);
+    expect(names).toContain('Main Workspace Project');
+    expect(names).not.toContain('External Workspace Project');
+  });
+
   it('members: OWNER can add MEMBER (default role)', async () => {
     const { user1 } = await ensureUsers();
 
@@ -319,6 +393,55 @@ describe('Projects / Members (e2e)', () => {
 
     await addMember(adminLogin.accessToken, project.id, user1.id).expect(201);
     await addMember(adminLogin.accessToken, project.id, user1.id).expect(409);
+  });
+
+  it('members: cannot add user from another workspace', async () => {
+    const adminLogin = await login(creds.admin.email, creds.admin.password);
+    const project = await createProject(adminLogin.accessToken);
+
+    const otherWorkspace = await prisma.workspace.create({
+      data: {
+        name: 'Members Isolation Workspace',
+        slug: `members-iso-${Date.now()}`,
+      },
+      select: { id: true },
+    });
+
+    const outsiderPasswordHash = await bcrypt.hash('123456', 10);
+    const outsider = await prisma.user.upsert({
+      where: { email: 'outsider.members@test.com' },
+      update: {
+        name: 'Members Outsider',
+        role: 'USER',
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      create: {
+        email: 'outsider.members@test.com',
+        name: 'Members Outsider',
+        role: 'USER',
+        passwordHash: outsiderPasswordHash,
+        defaultWorkspaceId: otherWorkspace.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: otherWorkspace.id,
+          userId: outsider.id,
+        },
+      },
+      update: { role: 'MEMBER' },
+      create: {
+        workspaceId: otherWorkspace.id,
+        userId: outsider.id,
+        role: 'MEMBER',
+      },
+    });
+
+    await addMember(adminLogin.accessToken, project.id, outsider.id).expect(403);
   });
 
   it('members: OWNER cannot add owner as member (should be 409 or 4xx)', async () => {

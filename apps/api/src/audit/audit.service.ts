@@ -4,6 +4,7 @@ import { Prisma, UserRole } from '@prisma/client';
 import { toPaginatedResult } from '../common/pagination';
 import { RequestContextService } from '../common/request-context.service';
 import { stableJsonStringify } from '../common/stable-json';
+import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListAuditLogsQueryDto } from './dto/list-audit-logs-query.dto';
 
@@ -21,6 +22,7 @@ export class AuditService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly requestContext: RequestContextService,
+    private readonly workspaceAccess: WorkspaceAccessService,
   ) {}
 
   async log(input: AuditLogInput) {
@@ -73,18 +75,26 @@ export class AuditService {
   }
 
   async list(requesterId: string, query: ListAuditLogsQueryDto) {
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+
     const requester = await this.prisma.user.findUnique({
       where: { id: requesterId },
       select: { role: true },
     });
 
-    let scopedProjectIds: string[] | null = null;
+    let scopedProjectIds: string[] = [];
 
     if (requester?.role === UserRole.ADMIN) {
-      scopedProjectIds = null;
+      const workspaceProjects = await this.prisma.project.findMany({
+        where: { workspaceId },
+        select: { id: true },
+      });
+      scopedProjectIds = workspaceProjects.map((project) => project.id);
     } else if (requester?.role === UserRole.MANAGER) {
       const managedProjects = await this.prisma.project.findMany({
         where: {
+          workspaceId,
           OR: [
             { ownerId: requesterId },
             {
@@ -110,19 +120,13 @@ export class AuditService {
     const projectIdQuery = query.projectId;
 
     const where: Prisma.AuditLogWhereInput = {
-      ...(scopedProjectIds
-        ? {
-            projectId: {
-              in: projectIdQuery
-                ? scopedProjectIds.filter(
-                    (projectId) => projectId.includes(projectIdQuery),
-                  )
-                : scopedProjectIds,
-            },
-          }
-        : projectIdQuery
-          ? { projectId: this.contains(projectIdQuery) }
-          : {}),
+      projectId: {
+        in: projectIdQuery
+          ? scopedProjectIds.filter((projectId) =>
+              projectId.includes(projectIdQuery),
+            )
+          : scopedProjectIds,
+      },
       ...(query.action ? { action: this.contains(query.action) } : {}),
       ...(query.entityType
         ? { entityType: this.contains(query.entityType) }

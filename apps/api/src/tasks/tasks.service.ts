@@ -8,6 +8,7 @@ import { Prisma, ProjectRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { requireIfMatchVersion } from '../common/if-match';
 import { toPaginatedResult } from '../common/pagination';
+import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -20,14 +21,22 @@ export class TasksService {
     private prisma: PrismaService,
     private realtime: RealtimeService,
     private audit: AuditService,
+    private workspaceAccess: WorkspaceAccessService,
   ) {}
 
-  private async getMyProjectRole(userId: string, projectId: string) {
+  private async getMyProjectRole(
+    userId: string,
+    workspaceId: string,
+    projectId: string,
+  ) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, workspaceId: true },
     });
     if (!project) throw new NotFoundException('Project not found');
+    if (project.workspaceId !== workspaceId) {
+      throw new NotFoundException('Project not found');
+    }
 
     // Owners keep full access even if the membership row is missing, so task
     // permissions follow project ownership as the source of truth.
@@ -70,15 +79,24 @@ export class TasksService {
     if (!member) throw new ForbiddenException('Assignee is not in project');
   }
 
-  private buildWorkspaceAccessWhere(userId: string, userRole: string) {
+  private buildWorkspaceAccessWhere(
+    userId: string,
+    userRole: string,
+    workspaceId: string,
+  ) {
     // Workspace task views are cross-project, so access has to be expressed via
     // the related project rather than a direct task field.
     if (userRole === 'ADMIN') {
-      return {};
+      return {
+        project: {
+          workspaceId,
+        },
+      };
     }
 
     return {
       project: {
+        workspaceId,
         OR: [{ ownerId: userId }, { members: { some: { userId } } }],
       },
     };
@@ -119,12 +137,15 @@ export class TasksService {
     userRole: string,
     query: ListTasksQueryDto,
   ) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
     const where: Prisma.TaskWhereInput = {
       AND: [
-        this.buildWorkspaceAccessWhere(userId, userRole),
+        this.buildWorkspaceAccessWhere(userId, userRole, workspaceId),
         this.buildTaskWhere(query),
       ],
     };
@@ -159,9 +180,15 @@ export class TasksService {
     userRole: string,
     taskId: string,
   ) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
     const task = await this.prisma.task.findFirst({
       where: {
-        AND: [{ id: taskId }, this.buildWorkspaceAccessWhere(userId, userRole)],
+        AND: [
+          { id: taskId },
+          this.buildWorkspaceAccessWhere(userId, userRole, workspaceId),
+        ],
       },
       include: {
         project: {
@@ -230,7 +257,10 @@ export class TasksService {
   }
 
   async create(userId: string, projectId: string, dto: CreateTaskDto) {
-    const role = await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.getMyProjectRole(userId, workspaceId, projectId);
     // Members can only create work for themselves. Owners/managers may set an
     // assignee explicitly, but only after membership validation.
     const assigneeId =
@@ -273,7 +303,10 @@ export class TasksService {
   }
 
   async list(userId: string, projectId: string, query: ListTasksQueryDto) {
-    await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -307,7 +340,10 @@ export class TasksService {
     ifMatchHeader: string | undefined,
     dto: UpdateTaskDto,
   ) {
-    const role = await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
@@ -378,7 +414,10 @@ export class TasksService {
     taskId: string,
     ifMatchHeader?: string,
   ) {
-    const role = await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, projectId },
@@ -424,7 +463,10 @@ export class TasksService {
     taskId: string,
     assigneeId: string,
   ) {
-    const role = await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();
@@ -463,7 +505,10 @@ export class TasksService {
   }
 
   async unassign(userId: string, projectId: string, taskId: string) {
-    const role = await this.getMyProjectRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.getMyProjectRole(userId, workspaceId, projectId);
 
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();

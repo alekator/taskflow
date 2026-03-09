@@ -9,7 +9,7 @@ describe('ProjectsService', () => {
   const prisma = {
     project: {
       create: jest.fn(),
-      findUnique: jest.fn(),
+      findFirst: jest.fn(),
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
       count: jest.fn(),
@@ -34,6 +34,9 @@ describe('ProjectsService', () => {
   const audit = {
     log: jest.fn(),
   };
+  const workspaceAccess = {
+    getRequiredWorkspace: jest.fn(),
+  };
 
   let service: ProjectsService;
 
@@ -43,7 +46,12 @@ describe('ProjectsService', () => {
       prisma as never,
       realtime as never,
       audit as never,
+      workspaceAccess as never,
     );
+    workspaceAccess.getRequiredWorkspace.mockResolvedValue({
+      workspaceId: 'ws_main',
+      memberRole: 'ADMIN',
+    });
   });
 
   it('create seeds owner membership and emits side effects', async () => {
@@ -68,6 +76,7 @@ describe('ProjectsService', () => {
         name: 'Project one',
         description: 'Alpha',
         ownerId: 'owner',
+        workspaceId: 'ws_main',
         members: {
           create: {
             userId: 'owner',
@@ -96,7 +105,7 @@ describe('ProjectsService', () => {
   });
 
   it('update rejects members before touching persistence', async () => {
-    prisma.project.findUnique.mockResolvedValueOnce({
+    prisma.project.findFirst.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
     });
@@ -113,7 +122,7 @@ describe('ProjectsService', () => {
   });
 
   it('update enforces If-Match version checks', async () => {
-    prisma.project.findUnique
+    prisma.project.findFirst
       .mockResolvedValueOnce({
         id: 'p1',
         ownerId: 'owner',
@@ -131,7 +140,7 @@ describe('ProjectsService', () => {
     });
 
     expect(prisma.project.updateMany).toHaveBeenCalledWith({
-      where: { id: 'p1', version: 3 },
+      where: { id: 'p1', workspaceId: 'ws_main', version: 3 },
       data: {
         name: 'Renamed',
         version: { increment: 1 },
@@ -152,7 +161,7 @@ describe('ProjectsService', () => {
   });
 
   it('update throws PreconditionFailedException on version mismatch', async () => {
-    prisma.project.findUnique.mockResolvedValueOnce({
+    prisma.project.findFirst.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
     });
@@ -166,7 +175,7 @@ describe('ProjectsService', () => {
   });
 
   it('addMember prevents managers from promoting peers', async () => {
-    prisma.project.findUnique
+    prisma.project.findFirst
       .mockResolvedValueOnce({
         id: 'p1',
         ownerId: 'owner',
@@ -190,7 +199,7 @@ describe('ProjectsService', () => {
   });
 
   it('leave removes a non-owner member and records the action', async () => {
-    prisma.project.findUnique.mockResolvedValueOnce({
+    prisma.project.findFirst.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
     });

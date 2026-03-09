@@ -9,6 +9,7 @@ import { Prisma, ProjectRole } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { requireIfMatchVersion } from '../common/if-match';
 import { toPaginatedResult } from '../common/pagination';
+import { WorkspaceAccessService } from '../common/workspace-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AddMemberDto } from './dto/add-member.dto';
@@ -24,17 +25,18 @@ export class ProjectsService {
     private prisma: PrismaService,
     private realtime: RealtimeService,
     private audit: AuditService,
+    private workspaceAccess: WorkspaceAccessService,
   ) {}
 
-  private async getProject(projectId: string) {
-    return this.prisma.project.findUnique({
-      where: { id: projectId },
+  private async getProject(workspaceId: string, projectId: string) {
+    return this.prisma.project.findFirst({
+      where: { id: projectId, workspaceId },
       select: { id: true, ownerId: true },
     });
   }
 
-  private async requireRole(userId: string, projectId: string) {
-    const project = await this.getProject(projectId);
+  private async requireRole(userId: string, workspaceId: string, projectId: string) {
+    const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     // Owners are treated as an implicit membership so permission checks do not
@@ -51,11 +53,16 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+
     const project = await this.prisma.project.create({
       data: {
         name: dto.name,
         description: dto.description,
         ownerId: userId,
+        workspaceId,
         members: {
           create: {
             userId,
@@ -84,15 +91,18 @@ export class ProjectsService {
   }
 
   async findMy(userId: string, userRole: string, query: ListProjectsQueryDto) {
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
-    // Non-admin users only see projects they own or belong to. Search and sort
-    // are layered on top of that access scope, never instead of it.
+    // Project listing is always constrained to the active workspace first.
     const accessWhere: Prisma.ProjectWhereInput =
       userRole === 'ADMIN'
-        ? {}
+        ? { workspaceId }
         : {
+            workspaceId,
             OR: [{ ownerId: userId }, { members: { some: { userId } } }],
           };
 
@@ -133,10 +143,13 @@ export class ProjectsService {
   }
 
   async findOne(userId: string, projectId: string) {
-    await this.requireRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    await this.requireRole(userId, workspaceId, projectId);
 
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, workspaceId },
     });
     if (!project) throw new NotFoundException('Project not found');
 
@@ -149,7 +162,10 @@ export class ProjectsService {
     ifMatchHeader: string | undefined,
     dto: UpdateProjectDto,
   ) {
-    const role = await this.requireRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.requireRole(userId, workspaceId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();
@@ -159,7 +175,7 @@ export class ProjectsService {
     // closes the race between "read current version" and "write changes".
     const expectedVersion = requireIfMatchVersion(ifMatchHeader);
     const result = await this.prisma.project.updateMany({
-      where: { id: projectId, version: expectedVersion },
+      where: { id: projectId, workspaceId, version: expectedVersion },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.description !== undefined
@@ -173,8 +189,8 @@ export class ProjectsService {
       throw new PreconditionFailedException('Version mismatch');
     }
 
-    const updated = await this.prisma.project.findUnique({
-      where: { id: projectId },
+    const updated = await this.prisma.project.findFirst({
+      where: { id: projectId, workspaceId },
     });
     if (!updated) throw new NotFoundException('Project not found');
 
@@ -194,7 +210,10 @@ export class ProjectsService {
   }
 
   async remove(userId: string, projectId: string, ifMatchHeader?: string) {
-    const role = await this.requireRole(userId, projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const role = await this.requireRole(userId, workspaceId, projectId);
     if (!role) throw new NotFoundException('Project not found');
     if (role !== ProjectRole.OWNER && role !== ProjectRole.MANAGER) {
       throw new ForbiddenException();
@@ -202,7 +221,7 @@ export class ProjectsService {
 
     const expectedVersion = requireIfMatchVersion(ifMatchHeader);
     const removed = await this.prisma.project.deleteMany({
-      where: { id: projectId, version: expectedVersion },
+      where: { id: projectId, workspaceId, version: expectedVersion },
     });
 
     if (removed.count !== 1) {
@@ -226,7 +245,9 @@ export class ProjectsService {
     projectId: string,
     query: ListMembersQueryDto,
   ) {
-    await this.requireRole(requesterId, projectId);
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+    await this.requireRole(requesterId, workspaceId, projectId);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -274,7 +295,13 @@ export class ProjectsService {
   }
 
   async addMember(requesterId: string, projectId: string, dto: AddMemberDto) {
-    const requesterRole = await this.requireRole(requesterId, projectId);
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+    const requesterRole = await this.requireRole(
+      requesterId,
+      workspaceId,
+      projectId,
+    );
 
     if (
       requesterRole !== ProjectRole.OWNER &&
@@ -283,7 +310,7 @@ export class ProjectsService {
       throw new ForbiddenException();
     }
 
-    const project = await this.getProject(projectId);
+    const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     const roleToSet = dto.role ?? ProjectRole.MEMBER;
@@ -302,9 +329,42 @@ export class ProjectsService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
-      select: { id: true },
+      select: { id: true, role: true, defaultWorkspaceId: true },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    const existingMembership = await this.prisma.workspaceMember.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: dto.userId,
+        },
+      },
+      select: { workspaceId: true },
+    });
+
+    if (!existingMembership) {
+      // Backward compatibility for legacy users created before workspaces were
+      // introduced: if they are not attached to any workspace yet, attach them
+      // to the current workspace on first explicit collaboration action.
+      if (user.defaultWorkspaceId) {
+        throw new ForbiddenException('User is not in workspace');
+      }
+
+      await this.prisma.$transaction([
+        this.prisma.workspaceMember.create({
+          data: {
+            workspaceId,
+            userId: user.id,
+            role: user.role === 'ADMIN' ? 'ADMIN' : 'MEMBER',
+          },
+        }),
+        this.prisma.user.update({
+          where: { id: user.id },
+          data: { defaultWorkspaceId: workspaceId },
+        }),
+      ]);
+    }
 
     try {
       const member = await this.prisma.projectMember.create({
@@ -353,7 +413,13 @@ export class ProjectsService {
     targetUserId: string,
     dto: UpdateMemberRoleDto,
   ) {
-    const requesterRole = await this.requireRole(requesterId, projectId);
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+    const requesterRole = await this.requireRole(
+      requesterId,
+      workspaceId,
+      projectId,
+    );
 
     if (
       requesterRole !== ProjectRole.OWNER &&
@@ -362,7 +428,7 @@ export class ProjectsService {
       throw new ForbiddenException();
     }
 
-    const project = await this.getProject(projectId);
+    const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     if (targetUserId === project.ownerId) throw new ForbiddenException();
@@ -415,7 +481,13 @@ export class ProjectsService {
     projectId: string,
     targetUserId: string,
   ) {
-    const requesterRole = await this.requireRole(requesterId, projectId);
+    const { workspaceId } =
+      await this.workspaceAccess.getRequiredWorkspace(requesterId);
+    const requesterRole = await this.requireRole(
+      requesterId,
+      workspaceId,
+      projectId,
+    );
 
     if (
       requesterRole !== ProjectRole.OWNER &&
@@ -424,7 +496,7 @@ export class ProjectsService {
       throw new ForbiddenException();
     }
 
-    const project = await this.getProject(projectId);
+    const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     if (targetUserId === project.ownerId) throw new ForbiddenException();
@@ -463,7 +535,10 @@ export class ProjectsService {
   }
 
   async leave(userId: string, projectId: string) {
-    const project = await this.getProject(projectId);
+    const { workspaceId } = await this.workspaceAccess.getRequiredWorkspace(
+      userId,
+    );
+    const project = await this.getProject(workspaceId, projectId);
     if (!project) throw new NotFoundException('Project not found');
 
     // Owners must transfer ownership explicitly; "leave" is reserved for

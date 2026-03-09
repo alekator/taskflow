@@ -5,7 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '@prisma/client';
+import { UserRole, WorkspaceMemberRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
@@ -25,6 +25,8 @@ export class AuthService {
   private readonly refreshSecret: string;
   private readonly managerInviteCode: string | null;
   private readonly adminInviteCode: string | null;
+  private readonly mainWorkspaceSlug = 'main';
+  private readonly mainWorkspaceId = 'ws_main';
 
   constructor(
     private prisma: PrismaService,
@@ -42,6 +44,56 @@ export class AuthService {
     this.managerInviteCode =
       process.env.AUTH_MANAGER_INVITE_CODE?.trim() ?? null;
     this.adminInviteCode = process.env.AUTH_ADMIN_INVITE_CODE?.trim() ?? null;
+  }
+
+  private workspaceRoleForUser(role: UserRole): WorkspaceMemberRole {
+    return role === UserRole.ADMIN
+      ? WorkspaceMemberRole.ADMIN
+      : WorkspaceMemberRole.MEMBER;
+  }
+
+  private async ensureMainWorkspaceMembership(user: {
+    id: string;
+    role: UserRole;
+    defaultWorkspaceId?: string | null;
+  }) {
+    const workspace = await this.prisma.workspace.upsert({
+      where: { slug: this.mainWorkspaceSlug },
+      update: {},
+      create: {
+        id: this.mainWorkspaceId,
+        slug: this.mainWorkspaceSlug,
+        name: 'TaskFlow Main Workspace',
+      },
+      select: { id: true },
+    });
+
+    const workspaceRole = this.workspaceRoleForUser(user.role);
+    await this.prisma.workspaceMember.upsert({
+      where: {
+        workspaceId_userId: {
+          workspaceId: workspace.id,
+          userId: user.id,
+        },
+      },
+      update: {
+        role: workspaceRole,
+      },
+      create: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        role: workspaceRole,
+      },
+    });
+
+    if (user.defaultWorkspaceId !== workspace.id) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { defaultWorkspaceId: workspace.id },
+      });
+    }
+
+    return workspace.id;
   }
 
   private signAccessToken(user: { id: string; email: string; role: UserRole }) {
@@ -163,8 +215,11 @@ export class AuthService {
         email: true,
         role: true,
         name: true,
+        defaultWorkspaceId: true,
       },
     });
+
+    await this.ensureMainWorkspaceMembership(created);
 
     const session = await this.buildSession(created);
 
@@ -180,11 +235,23 @@ export class AuthService {
   }
 
   async login(email: string, password: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        name: true,
+        passwordHash: true,
+        defaultWorkspaceId: true,
+      },
+    });
     if (!user) throw new UnauthorizedException('Invalid credentials');
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    await this.ensureMainWorkspaceMembership(user);
 
     const session = await this.buildSession({
       id: user.id,

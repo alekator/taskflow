@@ -28,6 +28,9 @@ describe('TasksService', () => {
   const audit = {
     log: jest.fn(),
   };
+  const workspaceAccess = {
+    getRequiredWorkspace: jest.fn(),
+  };
 
   let service: TasksService;
 
@@ -37,13 +40,19 @@ describe('TasksService', () => {
       prisma as never,
       realtime as never,
       audit as never,
+      workspaceAccess as never,
     );
+    workspaceAccess.getRequiredWorkspace.mockResolvedValue({
+      workspaceId: 'ws_main',
+      memberRole: 'ADMIN',
+    });
   });
 
   it('create auto-assigns task to member author', async () => {
     prisma.project.findUnique.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
+      workspaceId: 'ws_main',
     });
     prisma.projectMember.findUnique.mockResolvedValueOnce({
       role: ProjectRole.MEMBER,
@@ -71,10 +80,12 @@ describe('TasksService', () => {
     prisma.project.findUnique.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
+      workspaceId: 'ws_main',
     });
     prisma.user.findUnique.mockResolvedValueOnce({ id: 'u2' });
     prisma.project.findUnique.mockResolvedValueOnce({
       ownerId: 'owner',
+      workspaceId: 'ws_main',
     });
     prisma.projectMember.findUnique.mockResolvedValueOnce({
       userId: 'u2',
@@ -106,6 +117,7 @@ describe('TasksService', () => {
     prisma.project.findUnique.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
+      workspaceId: 'ws_main',
     });
     prisma.projectMember.findUnique.mockResolvedValueOnce({
       role: ProjectRole.MEMBER,
@@ -120,6 +132,7 @@ describe('TasksService', () => {
     prisma.project.findUnique.mockResolvedValueOnce({
       id: 'p1',
       ownerId: 'owner',
+      workspaceId: 'ws_main',
     });
     prisma.$transaction.mockResolvedValueOnce([
       1,
