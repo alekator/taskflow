@@ -438,15 +438,21 @@ TaskFlow is a strong base for:
 
 ## Roadmap
 
-Potential next steps for the project:
+Latest completed roadmap milestones:
 
 - richer notification center with read/unread state controls
 - expanded frontend unit/component test coverage
 - file attachments for tasks and projects
-- invitation flows by email (SMTP and provider presets)
+- invitation flows by email (SMTP mode + cloud deployment presets)
 - deeper assistant workflows and project summaries
 - deployment presets for TLS and cloud hosting
 - metrics and health dashboards for ops visibility
+
+Potential next iterations:
+
+- provider integrations beyond SMTP (SES/Resend/Postmark)
+- advanced operational dashboards and alerting packs
+- cloud presets for additional targets and managed services
 
 ## Open-Source Ready
 

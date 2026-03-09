@@ -241,6 +241,8 @@ Run these from the repository root unless noted otherwise.
 
 - `pnpm --filter web lint` - run ESLint with zero warnings allowed
 - `pnpm --filter web check-types` - generate Next types and run TypeScript checks
+- `pnpm --filter web test:unit` - run unit and component tests with Vitest
+- `pnpm --filter web test:unit:watch` - run unit/component tests in watch mode
 
 ### End-to-End Testing
 
@@ -250,14 +252,17 @@ Run these from the repository root unless noted otherwise.
 
 ## Testing Strategy
 
-The frontend currently uses Playwright e2e coverage for real user flows, including:
+The frontend uses a two-layer approach:
+
+- Vitest unit/component tests for API clients, auth components, notification drawer behavior, and project attachment UI flows
+- Playwright e2e coverage for full user journeys in the browser
+
+Current e2e focus includes:
 
 - landing and auth entry paths
 - navigation into the workspace
 - workspace screens loading correctly
 - critical task/project interactions
-
-This keeps testing focused on real behavior instead of shallow component snapshots.
 
 ## Implemented Screens
 
