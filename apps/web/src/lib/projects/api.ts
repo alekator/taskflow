@@ -25,6 +25,43 @@ export type ProjectMember = {
   };
 };
 
+export type ProjectAttachmentStatus = "PENDING" | "AVAILABLE" | "DELETED";
+
+export type ProjectAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageProvider: string;
+  status: ProjectAttachmentStatus;
+  uploadedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  downloadUrl: string;
+};
+
+export type ProjectAttachmentUploadIntent = {
+  attachment: {
+    id: string;
+    projectId: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    storageProvider: string;
+    objectKey: string;
+    status: ProjectAttachmentStatus;
+  };
+  upload: {
+    provider: string;
+    objectKey: string;
+    uploadUrl: string;
+    uploadMethod: "PUT";
+    headers: Record<string, string>;
+    expiresAt: string;
+  };
+  uploadToken: string;
+};
+
 export async function listProjects(params?: {
   page?: number;
   limit?: number;
@@ -96,5 +133,54 @@ export async function removeProjectMember(
   return authFetch<{ ok: boolean }>(`/projects/${projectId}/members/${userId}`, {
     method: "DELETE",
   });
+}
+
+export async function listProjectAttachments(
+  projectId: string,
+): Promise<ProjectAttachment[]> {
+  return authFetch<ProjectAttachment[]>(`/projects/${projectId}/attachments`);
+}
+
+export async function createProjectAttachmentUpload(
+  projectId: string,
+  input: {
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+  },
+): Promise<ProjectAttachmentUploadIntent> {
+  return authFetch<ProjectAttachmentUploadIntent>(
+    `/projects/${projectId}/attachments/uploads`,
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+}
+
+export async function completeProjectAttachmentUpload(
+  projectId: string,
+  attachmentId: string,
+  uploadToken: string,
+): Promise<ProjectAttachment> {
+  return authFetch<ProjectAttachment>(
+    `/projects/${projectId}/attachments/${attachmentId}/complete`,
+    {
+      method: "POST",
+      body: { uploadToken },
+    },
+  );
+}
+
+export async function deleteProjectAttachment(
+  projectId: string,
+  attachmentId: string,
+): Promise<{ ok: boolean }> {
+  return authFetch<{ ok: boolean }>(
+    `/projects/${projectId}/attachments/${attachmentId}`,
+    {
+      method: "DELETE",
+    },
+  );
 }
 

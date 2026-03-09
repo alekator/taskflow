@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../../src/components/auth/auth-provider";
 import { useToast } from "../../../../src/components/feedback/toast-provider";
+import { ProjectAttachmentsPanel } from "../../../../src/components/projects/project-attachments-panel";
 import { listAuditLogs, type AuditLog } from "../../../../src/lib/audit/api";
 import { getErrorDetails } from "../../../../src/lib/errors";
 import {
@@ -1147,6 +1148,8 @@ export default function ProjectDetailsPage() {
               ) : null}
             </section>
           ) : null}
+
+          <ProjectAttachmentsPanel projectId={projectId} />
 
           {isCreateTaskOpen ? (
             <div
