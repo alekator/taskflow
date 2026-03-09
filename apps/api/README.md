@@ -126,6 +126,9 @@ apps/api/src
 ### Public and Utility
 
 - `GET /health`
+- `GET /health/live`
+- `GET /health/ready`
+- `GET /metrics`
 - `GET /`
 
 ### Auth
@@ -163,6 +166,17 @@ apps/api/src
 - `GET /tasks/:id`
 - `GET /tasks/:id/roadmap`
 - `PATCH /tasks/:id/roadmap`
+
+### Attachments
+
+- `POST /tasks/:taskId/attachments/uploads`
+- `POST /tasks/:taskId/attachments/:attachmentId/complete`
+- `GET /tasks/:taskId/attachments`
+- `DELETE /tasks/:taskId/attachments/:attachmentId`
+- `POST /projects/:projectId/attachments/uploads`
+- `POST /projects/:projectId/attachments/:attachmentId/complete`
+- `GET /projects/:projectId/attachments`
+- `DELETE /projects/:projectId/attachments/:attachmentId`
 
 ### Users
 

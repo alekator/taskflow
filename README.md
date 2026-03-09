@@ -334,8 +334,52 @@ This means a fresh server can boot the full product stack with one production co
 ### Production Commands
 
 - `pnpm prod:up`
+- `pnpm prod:up:tls`
 - `pnpm prod:logs`
 - `pnpm prod:down`
+- `pnpm ops:up`
+- `pnpm ops:logs`
+- `pnpm ops:down`
+
+### TLS Preset
+
+TaskFlow ships with a TLS-ready nginx preset:
+
+- `deploy/nginx.tls.prod.conf`
+- `docker-compose.tls.yml`
+
+To use it:
+
+1. Put certificates in `deploy/certs/`:
+
+- `deploy/certs/fullchain.pem`
+- `deploy/certs/privkey.pem`
+
+2. Start with TLS override:
+
+```bash
+pnpm prod:up:tls
+```
+
+### Ops Monitoring Preset
+
+TaskFlow includes a ready-to-run observability stack for production metrics:
+
+- `docker-compose.ops.yml`
+- `deploy/monitoring/prometheus/prometheus.yml`
+- `deploy/monitoring/grafana/provisioning/*`
+- `deploy/monitoring/grafana/dashboards/taskflow-overview.json`
+
+Start monitoring with:
+
+```bash
+pnpm ops:up
+```
+
+Then open:
+
+- Prometheus: `http://YOUR_SERVER_IP:9090`
+- Grafana: `http://YOUR_SERVER_IP:3005` (default `admin` / `admin`)
 
 ## Testing
 

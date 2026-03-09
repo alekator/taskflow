@@ -60,5 +60,8 @@ describe('Observability (e2e)', () => {
     const metrics = await request(server).get(api('/metrics')).expect(200);
     expect(String(metrics.text)).toContain('taskflow_http_requests_total');
     expect(String(metrics.text)).toContain('taskflow_http_request_errors_total');
+    expect(String(metrics.text)).toContain(
+      'taskflow_http_requests_by_route_total{method="GET",route="/api/health"}',
+    );
   });
 });
