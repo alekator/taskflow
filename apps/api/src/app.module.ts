@@ -13,6 +13,7 @@ import { AssistantModule } from './assistant/assistant.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
+import { ObservabilityMiddleware } from './common/middleware/observability.middleware';
 import { RequestContextModule } from './common/request-context.module';
 import { WorkspaceAccessModule } from './common/workspace-access.module';
 import { validateEnv } from './config/env.validation';
@@ -29,6 +30,7 @@ import { BillingModule } from './billing/billing.module';
 import { StorageModule } from './storage/storage.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AsyncJobsModule } from './async-jobs/async-jobs.module';
+import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { AsyncJobsModule } from './async-jobs/async-jobs.module';
     }),
     RequestContextModule,
     WorkspaceAccessModule,
+    ObservabilityModule,
     AsyncJobsModule,
     StorageModule,
     ThrottlerModule.forRootAsync({
@@ -74,7 +77,7 @@ import { AsyncJobsModule } from './async-jobs/async-jobs.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestContextMiddleware).forRoutes({
+    consumer.apply(RequestContextMiddleware, ObservabilityMiddleware).forRoutes({
       path: '*path',
       method: RequestMethod.ALL,
     });

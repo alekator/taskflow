@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ObservabilityService } from './observability/observability.service';
 import { PrismaService } from './prisma/prisma.service';
 
 type DependencyStatus = 'CONNECTED' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
@@ -10,7 +11,10 @@ type DatabaseHealth = {
 
 @Injectable()
 export class AppService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly observability: ObservabilityService,
+  ) {}
 
   getHello(): string {
     return 'OK';
@@ -38,6 +42,7 @@ export class AppService {
   async health() {
     const memory = process.memoryUsage();
     const database = await this.getDatabaseStatus();
+    const http = this.observability.getHttpSnapshot();
 
     return {
       status: 'ok',
@@ -63,6 +68,33 @@ export class AppService {
         databaseLatencyMs: database.latencyMs,
         realtime: 'ENABLED' as ServiceStatus,
       },
+      http,
     };
+  }
+
+  live() {
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+    };
+  }
+
+  async ready() {
+    const database = await this.getDatabaseStatus();
+    const ready = database.status === 'CONNECTED';
+
+    return {
+      status: ready ? 'ready' : 'degraded',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: database.status,
+        databaseLatencyMs: database.latencyMs,
+      },
+    };
+  }
+
+  metrics() {
+    return this.observability.renderPrometheusMetrics();
   }
 }
