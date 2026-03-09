@@ -25,6 +25,7 @@ import { IdempotencyModule } from './idempotency/idempotency.module';
 import { IdempotencyInterceptor } from './idempotency/idempotency.interceptor';
 import { NotificationsModule } from './notifications/notifications.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { InvitationsModule } from './invitations/invitations.module';
     IdempotencyModule,
     NotificationsModule,
     InvitationsModule,
+    BillingModule,
     RealtimeModule,
     AuthModule,
     UsersModule,

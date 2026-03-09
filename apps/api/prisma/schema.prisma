@@ -24,6 +24,19 @@ enum WorkspaceInvitationStatus {
   EXPIRED
 }
 
+enum BillingProvider {
+  NONE
+  STRIPE
+}
+
+enum WorkspaceSubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
 enum ProjectRole {
   OWNER
   MANAGER
@@ -67,6 +80,7 @@ model Workspace {
   usersWithDefault User[] @relation("UserDefaultWorkspace")
   workspaceMembers WorkspaceMember[]
   invitations WorkspaceInvitation[]
+  billing WorkspaceBilling?
 }
 
 model WorkspaceMember {
@@ -104,6 +118,48 @@ model WorkspaceInvitation {
   @@index([workspaceId, email, status])
   @@index([email])
   @@index([expiresAt])
+}
+
+model WorkspaceBilling {
+  id                     String                      @id @default(cuid())
+  workspaceId            String                      @unique
+  provider               BillingProvider             @default(NONE)
+  providerCustomerId     String?                     @unique
+  providerSubscriptionId String?
+  status                 WorkspaceSubscriptionStatus @default(TRIALING)
+  planCode               String                      @default("free")
+  seats                  Int                         @default(1)
+  trialEndsAt            DateTime?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean                     @default(false)
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  workspace Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events    WorkspaceBillingEvent[]
+
+  @@index([workspaceId, status])
+  @@index([provider, providerSubscriptionId])
+}
+
+model WorkspaceBillingEvent {
+  id                 String   @id @default(cuid())
+  workspaceBillingId String
+  source             String
+  type               String
+  externalEventId    String
+  idempotencyKey     String?
+  payload            Json?
+  processedAt        DateTime?
+  createdAt          DateTime @default(now())
+
+  workspaceBilling WorkspaceBilling @relation(fields: [workspaceBillingId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceBillingId, externalEventId])
+  @@unique([workspaceBillingId, idempotencyKey])
+  @@index([workspaceBillingId, createdAt])
+  @@index([source, type])
 }
 
 model Project {
