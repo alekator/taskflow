@@ -21,6 +21,49 @@ export type SendAssistantMessageResponse = {
   remainingDailyLimit: number | null;
 };
 
+export type AssistantProjectSummary = {
+  project: {
+    id: string;
+    name: string;
+    description: string | null;
+    updatedAt: string;
+  };
+  stats: {
+    totalTasks: number;
+    openTasks: number;
+    doneTasks: number;
+    overdueOpenTasks: number;
+    highPriorityOpenTasks: number;
+    staleOpenTasks: number;
+  };
+  statusBreakdown: {
+    TODO: number;
+    IN_PROGRESS: number;
+    TESTING: number;
+    DONE: number;
+  };
+  assigneeLoad: Array<{
+    userId: string | null;
+    name: string | null;
+    email: string | null;
+    openTasks: number;
+  }>;
+  recentTasks: Array<{
+    id: string;
+    title: string;
+    status: "TODO" | "IN_PROGRESS" | "TESTING" | "DONE";
+    priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+    dueDate: string | null;
+    updatedAt: string;
+    assignee: {
+      id: string;
+      name: string | null;
+      email: string;
+    } | null;
+  }>;
+  summary: string;
+};
+
 export async function listAssistantHistory(params?: {
   page?: number;
   limit?: number;
@@ -43,3 +86,11 @@ export async function sendAssistantMessage(
   });
 }
 
+export async function getAssistantProjectSummary(
+  projectId: string,
+): Promise<AssistantProjectSummary> {
+  const search = new URLSearchParams({ projectId });
+  return authFetch<AssistantProjectSummary>(
+    `/assistant/project-summary?${search.toString()}`,
+  );
+}

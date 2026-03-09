@@ -11,6 +11,7 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequestUser } from '../auth/request-user.type';
 import { ListAssistantMessagesQueryDto } from './dto/list-assistant-messages-query.dto';
+import { ProjectSummaryQueryDto } from './dto/project-summary-query.dto';
 import { SendAssistantMessageDto } from './dto/send-assistant-message.dto';
 import { AssistantService } from './assistant.service';
 
@@ -36,6 +37,18 @@ export class AssistantController {
       req.user.email,
       req.user.role,
       dto.message,
+    );
+  }
+
+  @Get('project-summary')
+  getProjectSummary(
+    @Req() req: AuthedRequest,
+    @Query() query: ProjectSummaryQueryDto,
+  ) {
+    return this.assistant.getProjectSummary(
+      req.user.id,
+      req.user.role,
+      query.projectId,
     );
   }
 }

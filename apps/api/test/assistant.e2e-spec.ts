@@ -35,6 +35,12 @@ describe('Assistant (e2e)', () => {
       name: 'User One',
       role: 'USER' as const,
     },
+    user2: {
+      email: 'user2@test.com',
+      password: '123456',
+      name: 'User Two',
+      role: 'USER' as const,
+    },
   };
 
   async function ensureUsers() {
@@ -66,6 +72,21 @@ describe('Assistant (e2e)', () => {
         email: creds.user1.email,
         name: creds.user1.name,
         role: creds.user1.role,
+        passwordHash,
+      },
+    });
+
+    await prisma.user.upsert({
+      where: { email: creds.user2.email },
+      update: {
+        name: creds.user2.name,
+        role: creds.user2.role,
+        passwordHash,
+      },
+      create: {
+        email: creds.user2.email,
+        name: creds.user2.name,
+        role: creds.user2.role,
         passwordHash,
       },
     });
@@ -191,5 +212,78 @@ describe('Assistant (e2e)', () => {
     expect(historyBody.items[0].role).toBe('USER');
     expect(historyBody.items[1].role).toBe('ASSISTANT');
     expect(historyBody.items[1].mode).toBe('BASIC');
+  });
+
+  it('returns project summary for accessible project and blocks non-members', async () => {
+    const admin = await login(creds.admin.email, creds.admin.password);
+    const member = await login(creds.user1.email, creds.user1.password);
+    const outsider = await login(creds.user2.email, creds.user2.password);
+
+    const memberUser = await prisma.user.findUnique({
+      where: { email: creds.user1.email },
+      select: { id: true },
+    });
+    if (!memberUser) throw new Error('member user not found');
+
+    const projectRes = await request(server)
+      .post(api('/projects'))
+      .set(authHeader(admin.accessToken))
+      .send({ name: 'Assistant summary project', description: 'summary target' })
+      .expect(201);
+    const project = projectRes.body as { id: string };
+
+    await request(server)
+      .post(api(`/projects/${project.id}/members`))
+      .set(authHeader(admin.accessToken))
+      .send({ userId: memberUser.id, role: ProjectRole.MEMBER })
+      .expect(201);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/tasks`))
+      .set(authHeader(admin.accessToken))
+      .send({
+        title: 'Urgent overdue task',
+        status: TaskStatus.TODO,
+        priority: 'URGENT',
+        dueDate: new Date(Date.now() - 60_000).toISOString(),
+        assigneeId: memberUser.id,
+      })
+      .expect(201);
+
+    await request(server)
+      .post(api(`/projects/${project.id}/tasks`))
+      .set(authHeader(admin.accessToken))
+      .send({
+        title: 'Closed task',
+        status: TaskStatus.DONE,
+      })
+      .expect(201);
+
+    const summaryRes = await request(server)
+      .get(api(`/assistant/project-summary?projectId=${project.id}`))
+      .set(authHeader(member.accessToken))
+      .expect(200);
+
+    const summaryBody = summaryRes.body as {
+      project: { id: string; name: string };
+      stats: { totalTasks: number; openTasks: number; doneTasks: number };
+      statusBreakdown: { TODO: number; DONE: number };
+      assigneeLoad: Array<{ userId: string | null; openTasks: number }>;
+      summary: string;
+    };
+
+    expect(summaryBody.project.id).toBe(project.id);
+    expect(summaryBody.stats.totalTasks).toBe(2);
+    expect(summaryBody.stats.openTasks).toBe(1);
+    expect(summaryBody.stats.doneTasks).toBe(1);
+    expect(summaryBody.statusBreakdown.TODO).toBe(1);
+    expect(summaryBody.statusBreakdown.DONE).toBe(1);
+    expect(summaryBody.assigneeLoad[0].userId).toBe(memberUser.id);
+    expect(summaryBody.summary).toContain('Project "Assistant summary project"');
+
+    await request(server)
+      .get(api(`/assistant/project-summary?projectId=${project.id}`))
+      .set(authHeader(outsider.accessToken))
+      .expect(403);
   });
 });
