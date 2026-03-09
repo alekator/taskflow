@@ -17,6 +17,13 @@ enum WorkspaceMemberRole {
   MEMBER
 }
 
+enum WorkspaceInvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 enum ProjectRole {
   OWNER
   MANAGER
@@ -44,6 +51,7 @@ model User {
   auditLogs      AuditLog[]
   idempotencyRecords IdempotencyRecord[]
   assistantMessages AssistantMessage[]
+  invitationsSent WorkspaceInvitation[] @relation("WorkspaceInvitationSender")
 
   @@index([defaultWorkspaceId])
 }
@@ -58,6 +66,7 @@ model Workspace {
   projects Project[]
   usersWithDefault User[] @relation("UserDefaultWorkspace")
   workspaceMembers WorkspaceMember[]
+  invitations WorkspaceInvitation[]
 }
 
 model WorkspaceMember {
@@ -73,6 +82,28 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([workspaceId])
   @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id              String                    @id @default(cuid())
+  workspaceId     String
+  email           String
+  role            WorkspaceMemberRole       @default(MEMBER)
+  invitedByUserId String
+  status          WorkspaceInvitationStatus @default(PENDING)
+  tokenHash       String                    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("WorkspaceInvitationSender", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, email, status])
+  @@index([email])
+  @@index([expiresAt])
 }
 
 model Project {

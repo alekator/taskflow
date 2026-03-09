@@ -9,6 +9,7 @@ import { UserRole, WorkspaceMemberRole } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 
@@ -32,6 +33,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private audit: AuditService,
+    private invitations: InvitationsService,
   ) {
     // Validate secrets on boot so auth fails loudly during startup instead of
     // producing hard-to-debug token errors later at request time.
@@ -94,6 +96,30 @@ export class AuthService {
     }
 
     return workspace.id;
+  }
+
+  private async ensureAnyWorkspaceMembership(user: {
+    id: string;
+    role: UserRole;
+    defaultWorkspaceId?: string | null;
+  }) {
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: { userId: user.id },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { workspaceId: true },
+    });
+
+    if (!membership) {
+      await this.ensureMainWorkspaceMembership(user);
+      return;
+    }
+
+    if (user.defaultWorkspaceId !== membership.workspaceId) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { defaultWorkspaceId: membership.workspaceId },
+      });
+    }
   }
 
   private signAccessToken(user: { id: string; email: string; role: UserRole }) {
@@ -189,6 +215,10 @@ export class AuthService {
 
   async register(input: RegisterDto) {
     const email = input.email.trim().toLowerCase();
+    const invitation = await this.invitations.consumeForRegistration(
+      email,
+      input.inviteToken,
+    );
     const requestedRole = this.getRequestedRole(input);
 
     this.ensureInviteForRole(requestedRole, input.inviteCode);
@@ -209,6 +239,7 @@ export class AuthService {
         passwordHash,
         role: requestedRole,
         name: input.name?.trim() || null,
+        defaultWorkspaceId: invitation?.workspaceId ?? null,
       },
       select: {
         id: true,
@@ -219,7 +250,25 @@ export class AuthService {
       },
     });
 
-    await this.ensureMainWorkspaceMembership(created);
+    if (invitation) {
+      await this.prisma.workspaceMember.upsert({
+        where: {
+          workspaceId_userId: {
+            workspaceId: invitation.workspaceId,
+            userId: created.id,
+          },
+        },
+        update: { role: invitation.role },
+        create: {
+          workspaceId: invitation.workspaceId,
+          userId: created.id,
+          role: invitation.role,
+        },
+      });
+      await this.invitations.accept(invitation.id, created.id);
+    } else {
+      await this.ensureMainWorkspaceMembership(created);
+    }
 
     const session = await this.buildSession(created);
 
@@ -251,7 +300,7 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
-    await this.ensureMainWorkspaceMembership(user);
+    await this.ensureAnyWorkspaceMembership(user);
 
     const session = await this.buildSession({
       id: user.id,
