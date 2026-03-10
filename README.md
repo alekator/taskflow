@@ -11,6 +11,30 @@ Open-source team workspace for projects, tasks, ownership, audit visibility, and
 
 TaskFlow is a full-stack monorepo that combines a production-oriented NestJS API with a polished Next.js and React frontend. It is built to feel like a real product: secure auth, role-aware collaboration, concurrency-safe writes, audit trails, realtime updates, and a premium workspace UI.
 
+## Table of Contents
+
+- [Launch Vision](#launch-vision)
+- [What Makes It Strong](#what-makes-it-strong)
+- [Highlights](#highlights)
+- [Engineering Proof Pack](#engineering-proof-pack)
+- [Screenshots](#screenshots)
+- [Feature Set](#feature-set)
+- [Tech Stack](#tech-stack)
+- [Monorepo Structure](#monorepo-structure)
+- [Key Architecture](#key-architecture)
+- [Quick Start](#quick-start)
+- [Demo Accounts](#demo-accounts)
+- [Development Commands](#development-commands)
+- [Production Deployment](#production-deployment)
+- [Testing](#testing)
+- [Package Docs](#package-docs)
+- [Use Cases](#use-cases)
+- [Roadmap](#roadmap)
+- [Open-Source Ready](#open-source-ready)
+- [Contributing](#contributing)
+- [License](#license)
+- [Status](#status)
+
 ## Launch Vision
 
 TaskFlow is built for teams that move fast and still need structure. It turns scattered updates, task drift, and hidden ownership into one visible operating surface for delivery.
@@ -53,6 +77,17 @@ TaskFlow is not just a CRUD dashboard. It is opinionated around product-grade re
 - Optional AI assistant mode with zero-cost fallback
 - Local one-command bootstrap
 - Dockerized production deployment with nginx reverse proxy
+
+## Engineering Proof Pack
+
+This repository is optimized for technical evaluation, not just feature demos.
+
+- CI quality gate: `.github/workflows/ci.yml` runs lint, typecheck, web unit tests, API unit tests, API e2e, and app builds.
+- Visual regression pipeline: `.github/workflows/visual-regression.yml` publishes Storybook snapshots to Chromatic on pull requests (when `CHROMATIC_PROJECT_TOKEN` is configured).
+- Alerting pack with provisioning: Prometheus + Alertmanager rules for API down, 5xx spikes, p95 latency, failed async jobs, and DB degraded states.
+- Load-test profile and benchmark baseline: [`BENCHMARK.md`](./BENCHMARK.md) + `autocannon`/`k6` scripts in `scripts/load`.
+- Architecture decision records: [`docs/adr`](./docs/adr/README.md) capturing tenancy, RBAC, idempotency, audit-chain, and observability decisions.
+- Security and integrity signal: admin audit-chain verification endpoint `GET /api/admin/audit/verify`.
 
 ## Screenshots
 
@@ -279,8 +314,13 @@ Password for seeded demo users:
 - `pnpm --filter web start`
 - `pnpm --filter web lint`
 - `pnpm --filter web check-types`
+- `pnpm --filter web test:unit`
 - `pnpm --filter web test:e2e`
 - `pnpm --filter web test:e2e:ui`
+- `pnpm --filter web storybook`
+- `pnpm --filter web storybook:build`
+- `pnpm --filter web storybook:test`
+- `pnpm --filter web storybook:visual`
 - `pnpm --filter web exec playwright install`
 
 ## Production Deployment
@@ -419,6 +459,15 @@ Starter presets are included in `deploy/cloud`:
 
 - Playwright end-to-end tests for real user flows
 - Navigation and key app paths tested through the browser layer
+- Vitest unit/component tests for critical UI and integration components
+- Storybook component isolation and Chromatic visual regression workflow
+
+### CI Quality Gate
+
+Every push/PR is verified by pipeline stages in `.github/workflows/ci.yml`:
+
+- quality: lint + typecheck + unit tests + build
+- e2e: Prisma migrate deploy + API end-to-end regression suite
 
 ## Package Docs
 
@@ -426,6 +475,8 @@ For package-specific technical references:
 
 - Backend doc: [apps/api/README.md](./apps/api/README.md)
 - Frontend doc: [apps/web/README.md](./apps/web/README.md)
+- ADR index: [docs/adr/README.md](./docs/adr/README.md)
+- Benchmark baseline: [BENCHMARK.md](./BENCHMARK.md)
 
 ## Use Cases
 
@@ -447,12 +498,18 @@ Latest completed roadmap milestones:
 - deeper assistant workflows and project summaries
 - deployment presets for TLS and cloud hosting
 - metrics and health dashboards for ops visibility
+- alerting pack with provisioned Prometheus + Alertmanager rules
+- load test profile (`autocannon` + `k6`) and benchmark report baseline
+- Storybook setup with visual regression workflow (Chromatic)
+- architecture decision records (`docs/adr`)
+- full CI quality gate on PRs (quality + e2e split pipeline)
 
 Potential next iterations:
 
 - provider integrations beyond SMTP (SES/Resend/Postmark)
-- advanced operational dashboards and alerting packs
+- advanced operational dashboards with SLO- and error-budget views
 - cloud presets for additional targets and managed services
+- coverage reporting badges and historical benchmark trend tracking
 
 ## Open-Source Ready
 
