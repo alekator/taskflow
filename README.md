@@ -511,18 +511,6 @@ Potential next iterations:
 - cloud presets for additional targets and managed services
 - coverage reporting badges and historical benchmark trend tracking
 
-## Open-Source Ready
-
-TaskFlow already has the pieces that make an open-source launch credible:
-
-- a real backend architecture
-- a polished frontend experience
-- tests across backend and frontend flows
-- production deployment documentation
-- package-level docs for both major apps
-
-That makes this repository easy to understand, run locally, evaluate, and extend.
-
 ## Contributing
 
 If you want to extend TaskFlow:
@@ -539,25 +527,3 @@ Keeping contributions aligned with the current style matters:
 - production-minded code paths
 - test coverage for critical logic
 - no unnecessary boilerplate
-
-## License
-
-This project is currently private-source in structure but prepared to be published as open source.
-
-If you plan to publish it publicly, add the final license file you want to distribute with the repository, for example:
-
-- `MIT`
-- `Apache-2.0`
-- `GPL-3.0`
-
-## Status
-
-TaskFlow already includes:
-
-- a working backend API
-- a polished frontend application
-- automated tests
-- Dockerized production deployment
-- package-level technical documentation
-
-The next natural step is revision, refinement, and modification.
